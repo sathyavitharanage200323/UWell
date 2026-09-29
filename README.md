@@ -101,36 +101,16 @@ Management users can:
 
 ---
 
-# 📱 Main Student Flow
+### 🌿 Overall Git Structure
 
 ```text
-Login
-  │
-  ▼
-Home
-  │
-  ├── Mood Check-In
-  │      │
-  │      ▼
-  │   Check-In Result
-  │
-  ├── Find Counselor
-  │      │
-  │      ▼
-  │   Counselor Profile
-  │      │
-  │      ▼
-  │   Availability
-  │      │
-  │      ▼
-  │   Book Appointment
-  │      │
-  │      ▼
-  │   Review Booking
-  │      │
-  │      ▼
-  │   Confirmation
-  │
-  ├── Wellness Resources
-  │
-  └── My Appointments
+main
+│
+└── develop
+    │
+    ├── feature/student-module
+    ├── feature/counselor-module
+    ├── feature/welfare-module
+    └── feature/management-module
+
+
