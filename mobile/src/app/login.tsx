@@ -22,6 +22,12 @@ export default function LoginScreen() {
     'University Management',
   ];
 
+  const handleLogin = () => {
+    if (selectedRole === 'Student') {
+      router.push('/wellbeing-check');
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
@@ -115,11 +121,7 @@ export default function LoginScreen() {
         {/* Login */}
         <Pressable
           style={styles.loginButton}
-          onPress={() => {
-            if (selectedRole === 'Student') {
-              router.push('/home');
-            }
-          }}
+          onPress={handleLogin}
         >
           <Text style={styles.loginText}>
             Log In

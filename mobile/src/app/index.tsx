@@ -52,10 +52,15 @@ export default function WelcomeScreen() {
             styles.button,
             pressed && styles.buttonPressed,
           ]}
-          onPress={() => router.push('/login')}
+          onPress={() => router.push('/consent')}
         >
-          <Text style={styles.buttonText}>Get Started</Text>
-          <Text style={styles.arrow}>→</Text>
+          <Text style={styles.buttonText}>
+            Get Started
+          </Text>
+
+          <Text style={styles.arrow}>
+            →
+          </Text>
         </Pressable>
 
         {/* Privacy Message */}
