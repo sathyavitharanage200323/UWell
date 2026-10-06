@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -6,22 +6,75 @@ import {
   Text,
   View,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useLocalSearchParams } from 'expo-router';
 
 export default function WellbeingRecommendation() {
   const {
+    email,
     feeling,
     stress,
     sleep,
     energy,
     support,
   } = useLocalSearchParams<{
+    email?: string;
     feeling?: string;
     stress?: string;
     sleep?: string;
     energy?: string;
     support?: string;
   }>();
+
+  // Save wellbeing completion for this specific student
+  useEffect(() => {
+    const saveWellbeingCompletion = async () => {
+      try {
+        if (!email) {
+          console.log('ERROR: No email received');
+          return;
+        }
+
+        const normalizedEmail = String(email)
+          .trim()
+          .toLowerCase();
+
+        const wellbeingKey =
+          `wellbeingCompleted:${normalizedEmail}`;
+
+        await AsyncStorage.setItem(
+          wellbeingKey,
+          'true'
+        );
+
+        // Verify that the value was saved
+        const savedValue =
+          await AsyncStorage.getItem(wellbeingKey);
+
+        console.log('================================');
+        console.log(
+          'EMAIL:',
+          normalizedEmail
+        );
+        console.log(
+          'KEY:',
+          wellbeingKey
+        );
+        console.log(
+          'SAVED VALUE:',
+          savedValue
+        );
+        console.log('================================');
+      } catch (error) {
+        console.log(
+          'SAVE ERROR:',
+          error
+        );
+      }
+    };
+
+    saveWellbeingCompletion();
+  }, [email]);
 
   const getRecommendation = () => {
     if (
@@ -88,7 +141,9 @@ export default function WellbeingRecommendation() {
   const recommendation = getRecommendation();
 
   const handleAction = () => {
-    if (recommendation.action === 'Find a Counselor') {
+    if (
+      recommendation.action === 'Find a Counselor'
+    ) {
       router.push('/counselor-search');
       return;
     }
@@ -104,7 +159,9 @@ export default function WellbeingRecommendation() {
     >
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.smallTitle}>UWell</Text>
+        <Text style={styles.smallTitle}>
+          UWell
+        </Text>
 
         <Text style={styles.title}>
           Your wellbeing matters
@@ -204,7 +261,12 @@ export default function WellbeingRecommendation() {
           </Text>
         </View>
 
-        <View style={[styles.summaryRow, styles.lastRow]}>
+        <View
+          style={[
+            styles.summaryRow,
+            styles.lastRow,
+          ]}
+        >
           <Text style={styles.summaryLabel}>
             Support
           </Text>

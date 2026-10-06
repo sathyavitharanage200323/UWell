@@ -7,12 +7,33 @@ import {
   Text,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 
 const feelings = ['Very Good', 'Good', 'Okay', 'Low', 'Very Low'];
-const stressLevels = ['Very Low', 'Low', 'Moderate', 'High', 'Very High'];
-const sleepLevels = ['Very Good', 'Good', 'Okay', 'Poor', 'Very Poor'];
-const energyLevels = ['High', 'Good', 'Moderate', 'Low', 'Very Low'];
+
+const stressLevels = [
+  'Very Low',
+  'Low',
+  'Moderate',
+  'High',
+  'Very High',
+];
+
+const sleepLevels = [
+  'Very Good',
+  'Good',
+  'Okay',
+  'Poor',
+  'Very Poor',
+];
+
+const energyLevels = [
+  'High',
+  'Good',
+  'Moderate',
+  'Low',
+  'Very Low',
+];
 
 const supportOptions = [
   'Stress & Anxiety',
@@ -23,6 +44,11 @@ const supportOptions = [
 ];
 
 export default function WellbeingCheck() {
+  // Get the student email passed from Login
+  const { email } = useLocalSearchParams<{
+    email?: string;
+  }>();
+
   const [feeling, setFeeling] = useState('');
   const [stress, setStress] = useState('');
   const [sleep, setSleep] = useState('');
@@ -38,9 +64,11 @@ export default function WellbeingCheck() {
       return;
     }
 
+    // Pass the student's email together with the wellbeing answers
     router.push({
       pathname: '/wellbeing-recommendation',
       params: {
+        email: email || '',
         feeling,
         stress,
         sleep,
@@ -61,14 +89,25 @@ export default function WellbeingCheck() {
   }) => (
     <Pressable
       onPress={onPress}
-      style={[styles.option, selected && styles.optionSelected]}
+      style={[
+        styles.option,
+        selected && styles.optionSelected,
+      ]}
     >
-      <View style={[styles.radio, selected && styles.radioSelected]}>
+      <View
+        style={[
+          styles.radio,
+          selected && styles.radioSelected,
+        ]}
+      >
         {selected && <View style={styles.radioInner} />}
       </View>
 
       <Text
-        style={[styles.optionText, selected && styles.optionTextSelected]}
+        style={[
+          styles.optionText,
+          selected && styles.optionTextSelected,
+        ]}
       >
         {option}
       </Text>
@@ -85,7 +124,9 @@ export default function WellbeingCheck() {
       <View style={styles.header}>
         <Text style={styles.smallTitle}>UWell</Text>
 
-        <Text style={styles.title}>Let's understand how you're doing</Text>
+        <Text style={styles.title}>
+          Let's understand how you're doing
+        </Text>
 
         <Text style={styles.subtitle}>
           This short check helps us suggest useful wellbeing support for you.
@@ -94,7 +135,9 @@ export default function WellbeingCheck() {
 
       {/* Privacy Notice */}
       <View style={styles.privacyCard}>
-        <Text style={styles.privacyTitle}>🔒 Your privacy matters</Text>
+        <Text style={styles.privacyTitle}>
+          🔒 Your privacy matters
+        </Text>
 
         <Text style={styles.privacyText}>
           Your responses are private and are used to provide personalized
@@ -142,7 +185,9 @@ export default function WellbeingCheck() {
       <View style={styles.questionCard}>
         <Text style={styles.questionNumber}>03</Text>
 
-        <Text style={styles.question}>How has your sleep been?</Text>
+        <Text style={styles.question}>
+          How has your sleep been?
+        </Text>
 
         {sleepLevels.map((option) => (
           <OptionButton
@@ -158,7 +203,9 @@ export default function WellbeingCheck() {
       <View style={styles.questionCard}>
         <Text style={styles.questionNumber}>04</Text>
 
-        <Text style={styles.question}>How is your energy level?</Text>
+        <Text style={styles.question}>
+          How is your energy level?
+        </Text>
 
         {energyLevels.map((option) => (
           <OptionButton
@@ -189,8 +236,13 @@ export default function WellbeingCheck() {
       </View>
 
       {/* Continue */}
-      <Pressable style={styles.continueButton} onPress={handleContinue}>
-        <Text style={styles.continueText}>Continue</Text>
+      <Pressable
+        style={styles.continueButton}
+        onPress={handleContinue}
+      >
+        <Text style={styles.continueText}>
+          Continue
+        </Text>
       </Pressable>
 
       <Text style={styles.footerText}>
