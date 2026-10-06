@@ -6,11 +6,6 @@
     "orientation": "portrait",
     "icon": "./src/assets/icons/icon.png",
     "userInterfaceStyle": "light",
-    "splash": {
-      "image": "./src/assets/images/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
     "assetBundlePatterns": [
       "**/*"
     ],
@@ -27,6 +22,18 @@
     },
     "web": {
       "favicon": "./src/assets/icons/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-status-bar",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./src/assets/images/splash.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff",
+          "enableFullScreenImage_legacy": true
+        }
+      ]
+    ]
   }
 }
