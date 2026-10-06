@@ -7,7 +7,9 @@ import {
   Pressable,
   SafeAreaView,
   ScrollView,
+  Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 
 export default function LoginScreen() {
@@ -22,13 +24,73 @@ export default function LoginScreen() {
     'University Management',
   ];
 
+  const handleLogin = async () => {
+    // Basic validation
+    if (!email.trim() || !password.trim()) {
+      Alert.alert(
+        'Missing Information',
+        'Please enter your email and password.'
+      );
+      return;
+    }
+
+    // Student flow
+    if (selectedRole === 'Student') {
+      try {
+        // Create a unique wellbeing status key for each email
+        const normalizedEmail = email.trim().toLowerCase();
+
+        const wellbeingKey = `wellbeingCompleted:${normalizedEmail}`;
+
+        // Check whether this student has already completed
+        // the first-time wellbeing check
+        const wellbeingCompleted =
+          await AsyncStorage.getItem(wellbeingKey);
+
+        if (wellbeingCompleted === 'true') {
+          // Returning student
+          router.replace('/home');
+        } else {
+          // First-time student
+          router.push({
+            pathname: '/wellbeing-check',
+            params: {
+              email: normalizedEmail,
+            },
+          });
+        }
+      } catch (error) {
+        console.log(
+          'Error checking wellbeing completion:',
+          error
+        );
+
+        // If storage check fails, continue with first-time flow
+        router.push({
+          pathname: '/wellbeing-check',
+          params: {
+            email: email.trim().toLowerCase(),
+          },
+        });
+      }
+
+      return;
+    }
+
+    // Other roles will be connected to their real dashboards
+    // when backend authentication is implemented.
+    Alert.alert(
+      'Coming Next',
+      `${selectedRole} login will be connected to the backend next.`
+    );
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
       >
-
         {/* Header */}
         <Text style={styles.portal}>
           CAMPUS PORTAL
@@ -64,7 +126,8 @@ export default function LoginScreen() {
               <Text
                 style={[
                   styles.roleText,
-                  selectedRole === role && styles.selectedRoleText,
+                  selectedRole === role &&
+                    styles.selectedRoleText,
                 ]}
               >
                 {role}
@@ -86,6 +149,7 @@ export default function LoginScreen() {
           style={styles.input}
           keyboardType="email-address"
           autoCapitalize="none"
+          autoCorrect={false}
         />
 
         {/* Password */}
@@ -115,11 +179,7 @@ export default function LoginScreen() {
         {/* Login */}
         <Pressable
           style={styles.loginButton}
-          onPress={() => {
-            if (selectedRole === 'Student') {
-              router.push('/home');
-            }
-          }}
+          onPress={handleLogin}
         >
           <Text style={styles.loginText}>
             Log In
@@ -140,7 +200,6 @@ export default function LoginScreen() {
             </Text>
           </Pressable>
         </View>
-
       </ScrollView>
     </SafeAreaView>
   );
