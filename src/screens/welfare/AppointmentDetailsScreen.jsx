@@ -1,125 +1,180 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '../../theme';
-import Button from '../../components/common/Button';
-import Card from '../../components/common/Card';
-import NavigationHeader from '../../components/navigation/Header';
+import { welfareAppointments, appointmentDetailsMap } from '../../data/welfareMockData';
 
 const AppointmentDetailsScreen = ({ route, navigation }) => {
-  const { appointmentId } = route.params || {};
-
-  const appointment = {
-    student: 'John Smith',
-    studentId: 'STU001',
-    counselor: 'Dr. Sarah Johnson',
-    date: 'Today',
-    time: '2:00 PM',
-    status: 'confirmed',
-    type: 'Individual',
-    notes: 'Student requested help with anxiety management'
-  };
+  const aptId = route?.params?.id || 'apt-1';
+  const apt = welfareAppointments.find((a) => a.id === aptId) || welfareAppointments[0];
+  const details = appointmentDetailsMap[aptId] || appointmentDetailsMap['apt-1'];
 
   return (
-    <ScrollView style={styles.container}>
-      <NavigationHeader title="Appointment Details" onBack={() => navigation.goBack()} />
-      
-      <View style={styles.content}>
-        <Card style={styles.detailsCard}>
-          <Text style={styles.sectionTitle}>Appointment Information</Text>
-          
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Student:</Text>
-            <Text style={styles.detailValue}>{appointment.student}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Student ID:</Text>
-            <Text style={styles.detailValue}>{appointment.studentId}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Counselor:</Text>
-            <Text style={styles.detailValue}>{appointment.counselor}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Date & Time:</Text>
-            <Text style={styles.detailValue}>{appointment.date} at {appointment.time}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Type:</Text>
-            <Text style={styles.detailValue}>{appointment.type}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Status:</Text>
-            <Text style={[styles.detailValue, styles.statusConfirmed]}>{appointment.status}</Text>
-          </View>
-        </Card>
-
-        <Card style={styles.notesCard}>
-          <Text style={styles.sectionTitle}>Notes</Text>
-          <Text style={styles.notesText}>{appointment.notes}</Text>
-        </Card>
-
-        <Button
-          title="View Student Profile"
-          onPress={() => navigation.navigate('StudentDetails', { studentId: appointment.studentId })}
-          style={styles.button}
-        />
-
-        <Button
-          title="Reschedule Appointment"
-          variant="outline"
-          onPress={() => {}}
-          style={styles.button}
-        />
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Ionicons name="arrow-back" size={22} color={colors.text} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Appointment Details</Text>
       </View>
-    </ScrollView>
+
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Top Info Card */}
+        <View style={styles.topCard}>
+          <View style={styles.topRow}>
+            <View style={styles.statusBadge}>
+              <Text style={styles.statusBadgeText}>{apt.status}</Text>
+            </View>
+            <View style={styles.welfareLog}>
+              <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
+              <Text style={styles.welfareLogText}>Welfare Log</Text>
+            </View>
+          </View>
+          <Text style={styles.dateText}>{apt.date} • {apt.time}</Text>
+        </View>
+
+        {/* Details Card */}
+        <View style={styles.card}>
+          <InfoRow label="STUDENT REF" value={details.studentRef} />
+          <InfoRow label="COUNSELOR" value={details.counselor} />
+          <InfoRow label="SERVICE TYPE" value={details.serviceType} />
+          <InfoRow label="DURATION" value={details.duration} />
+          <InfoRow label="LOCATION" value={details.location} last />
+        </View>
+
+        {/* Notes Card */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Officer Session Notes</Text>
+          <Text style={styles.bodyText}>{details.notes}</Text>
+        </View>
+
+        {/* Actions */}
+        <TouchableOpacity style={styles.outlineButton} activeOpacity={0.7}>
+          <Text style={styles.outlineButtonText}>Reschedule Appointment</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.outlineButton} activeOpacity={0.7}>
+          <Text style={styles.outlineButtonText}>Cancel Appointment</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
+const InfoRow = ({ label, value, last }) => (
+  <View style={[styles.infoRow, last && styles.infoRowLast]}>
+    <Text style={styles.infoLabel}>{label}</Text>
+    <Text style={styles.infoValue}>{value}</Text>
+  </View>
+);
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.backgroundLight
+  container: { flex: 1, backgroundColor: colors.creamBackground },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md
   },
-  content: {
-    padding: spacing.lg
+  backBtn: { padding: spacing.xs, marginRight: spacing.sm },
+  headerTitle: {
+    fontSize: typography.fontSize.xxl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text
   },
-  detailsCard: {
-    marginBottom: spacing.lg
+  scrollContent: { padding: spacing.lg, paddingTop: 0, paddingBottom: spacing.xxl },
+
+  topCard: {
+    backgroundColor: colors.backgroundLight,
+    borderRadius: 16,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border
   },
-  sectionTitle: {
+  topRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm
+  },
+  statusBadge: {
+    backgroundColor: '#FBE1DE',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8
+  },
+  statusBadgeText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.bold,
+    color: '#C0392B'
+  },
+  welfareLog: { flexDirection: 'row', alignItems: 'center' },
+  welfareLogText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.textSecondary,
+    marginLeft: 4
+  },
+  dateText: {
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.bold,
     color: colors.text,
-    marginBottom: spacing.md
+    marginTop: 4
   },
-  detailRow: {
-    flexDirection: 'row',
-    marginBottom: spacing.md
+
+  card: {
+    backgroundColor: colors.backgroundLight,
+    borderRadius: 16,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border
   },
-  detailLabel: {
+  cardTitle: {
     fontSize: typography.fontSize.md,
-    color: colors.textLight,
-    width: 120
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text,
+    marginBottom: spacing.sm
   },
-  detailValue: {
-    flex: 1,
+  bodyText: {
     fontSize: typography.fontSize.md,
-    color: colors.text
+    color: colors.textSecondary,
+    lineHeight: 22
   },
-  statusConfirmed: {
-    color: colors.success,
-    fontWeight: typography.fontWeight.bold
+
+  infoRow: {
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider
   },
-  notesCard: {
-    marginBottom: spacing.xl
+  infoRowLast: { borderBottomWidth: 0, paddingBottom: 0 },
+  infoLabel: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.textMuted,
+    letterSpacing: 0.5,
+    marginBottom: 4
   },
-  notesText: {
+  infoValue: {
     fontSize: typography.fontSize.md,
-    color: colors.textLight,
-    lineHeight: typography.lineHeight.relaxed
+    color: colors.text,
+    fontWeight: typography.fontWeight.medium
   },
-  button: {
-    marginTop: spacing.md
+
+  outlineButton: {
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    borderRadius: 14,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    marginBottom: spacing.md,
+    backgroundColor: colors.backgroundLight
+  },
+  outlineButtonText: {
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.primary
   }
 });
 

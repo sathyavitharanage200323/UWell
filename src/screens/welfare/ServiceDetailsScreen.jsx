@@ -1,189 +1,176 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '../../theme';
-import Button from '../../components/common/Button';
-import Input from '../../components/common/Input';
-import Card from '../../components/common/Card';
-import NavigationHeader from '../../components/navigation/Header';
+import { counselingServiceDetails } from '../../data/welfareMockData';
 
-const ServiceDetailsScreen = ({ route, navigation }) => {
-  const { serviceId } = route.params || {};
-  const [service, setService] = useState({
-    name: 'Individual Counseling',
-    description: 'One-on-one sessions with professional counselors for personalized mental health support.',
-    icon: '👤',
-    active: true,
-    counselors: 12,
-    duration: '50 minutes',
-    price: 'Free for students'
-  });
-
-  const handleSave = () => {
-    // Save service logic
-  };
-
-  const handleToggleStatus = () => {
-    setService({ ...service, active: !service.active });
-  };
+const ServiceDetailsScreen = ({ navigation }) => {
+  const svc = counselingServiceDetails;
 
   return (
-    <ScrollView style={styles.container}>
-      <NavigationHeader title="Service Details" onBack={() => navigation.goBack()} />
-      
-      <View style={styles.content}>
-        <Card style={styles.headerCard}>
-          <View style={styles.iconContainer}>
-            <Text style={styles.serviceIcon}>{service.icon}</Text>
-          </View>
-          <Text style={styles.serviceName}>{service.name}</Text>
-          <View style={[
-            styles.statusBadge,
-            service.active ? styles.activeBadge : styles.inactiveBadge
-          ]}>
-            <Text style={styles.statusText}>
-              {service.active ? 'Active' : 'Inactive'}
-            </Text>
-          </View>
-        </Card>
-
-        <Card style={styles.formCard}>
-          <Text style={styles.sectionTitle}>Service Information</Text>
-          
-          <Input
-            label="Service Name"
-            value={service.name}
-            onChangeText={(value) => setService({ ...service, name: value })}
-          />
-
-          <Input
-            label="Description"
-            value={service.description}
-            onChangeText={(value) => setService({ ...service, description: value })}
-            multiline
-          />
-
-          <Input
-            label="Duration"
-            value={service.duration}
-            onChangeText={(value) => setService({ ...service, duration: value })}
-          />
-
-          <Input
-            label="Price"
-            value={service.price}
-            onChangeText={(value) => setService({ ...service, price: value })}
-          />
-        </Card>
-
-        <Card style={styles.statsCard}>
-          <Text style={styles.sectionTitle}>Statistics</Text>
-          <View style={styles.statRow}>
-            <Text style={styles.statLabel}>Active Counselors:</Text>
-            <Text style={styles.statValue}>{service.counselors}</Text>
-          </View>
-          <View style={styles.statRow}>
-            <Text style={styles.statLabel}>Total Sessions This Month:</Text>
-            <Text style={styles.statValue}>156</Text>
-          </View>
-          <View style={styles.statRow}>
-            <Text style={styles.statLabel}>Student Satisfaction:</Text>
-            <Text style={styles.statValue}>4.8/5.0</Text>
-          </View>
-        </Card>
-
-        <Button
-          title={service.active ? 'Deactivate Service' : 'Activate Service'}
-          onPress={handleToggleStatus}
-          variant={service.active ? 'outline' : 'primary'}
-          style={styles.button}
-        />
-
-        <Button
-          title="Save Changes"
-          onPress={handleSave}
-          style={styles.button}
-        />
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Ionicons name="arrow-back" size={22} color={colors.text} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>{svc.title}</Text>
       </View>
-    </ScrollView>
+
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Tag Banner */}
+        <View style={styles.tagBanner}>
+          <Text style={styles.tagText}>{svc.tag}</Text>
+        </View>
+
+        {/* About */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>About This Service</Text>
+          <Text style={styles.bodyText}>{svc.about}</Text>
+        </View>
+
+        {/* Services Offered */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Services Offered</Text>
+          {svc.servicesOffered.map((item, i) => (
+            <View key={i} style={styles.bulletRow}>
+              <View style={styles.bullet} />
+              <Text style={styles.bulletText}>{item}</Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Contact */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Contact Information</Text>
+
+          <View style={styles.contactRow}>
+            <Text style={styles.contactLabel}>WELFARE PHONE</Text>
+            <Text style={styles.contactValue}>{svc.contact.phone}</Text>
+          </View>
+          <View style={styles.contactRow}>
+            <Text style={styles.contactLabel}>WELFARE EMAIL</Text>
+            <Text style={styles.contactValue}>{svc.contact.email}</Text>
+          </View>
+          <View style={styles.contactRow}>
+            <Text style={styles.contactLabel}>OFFICE HOURS</Text>
+            <Text style={styles.contactValue}>{svc.contact.hours}</Text>
+          </View>
+        </View>
+
+        {/* Location */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Location</Text>
+          <Text style={styles.bodyText}>{svc.location}</Text>
+        </View>
+
+        <TouchableOpacity style={styles.primaryButton} activeOpacity={0.85}>
+          <Ionicons name="calendar-outline" size={18} color={colors.textWhite} />
+          <Text style={styles.primaryButtonText}>Book an Appointment</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.backgroundLight
-  },
-  content: {
-    padding: spacing.lg
-  },
-  headerCard: {
+  container: { flex: 1, backgroundColor: colors.creamBackground },
+  header: {
+    flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.xl,
-    marginBottom: spacing.lg
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md
   },
-  iconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: colors.primaryLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: spacing.md
-  },
-  serviceIcon: {
-    fontSize: 40
-  },
-  serviceName: {
+  backBtn: { padding: spacing.xs, marginRight: spacing.sm },
+  headerTitle: {
     fontSize: typography.fontSize.xxl,
     fontWeight: typography.fontWeight.bold,
-    color: colors.text,
-    marginBottom: spacing.md
+    color: colors.text
   },
-  statusBadge: {
+  scrollContent: { padding: spacing.lg, paddingTop: 0, paddingBottom: spacing.xxl },
+
+  tagBanner: {
+    backgroundColor: '#FBE1DE',
+    alignSelf: 'flex-start',
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: 4
-  },
-  activeBadge: {
-    backgroundColor: colors.success
-  },
-  inactiveBadge: {
-    backgroundColor: colors.textLight
-  },
-  statusText: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.textWhite
-  },
-  formCard: {
+    paddingVertical: 6,
+    borderRadius: 6,
     marginBottom: spacing.lg
   },
+  tagText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.bold,
+    color: '#C0392B',
+    letterSpacing: 0.5
+  },
+
+  section: { marginBottom: spacing.lg },
   sectionTitle: {
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.bold,
     color: colors.text,
-    marginBottom: spacing.lg
+    marginBottom: spacing.sm
   },
-  statsCard: {
-    marginBottom: spacing.xl
-  },
-  statRow: {
-    flexDirection: 'row',
-    marginBottom: spacing.md
-  },
-  statLabel: {
+  bodyText: {
     fontSize: typography.fontSize.md,
-    color: colors.textLight,
-    width: 200
+    color: colors.textSecondary,
+    lineHeight: 22
   },
-  statValue: {
+
+  card: {
+    backgroundColor: colors.backgroundLight,
+    borderRadius: 16,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border
+  },
+  cardTitle: {
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text,
+    marginBottom: spacing.sm
+  },
+  bulletRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: spacing.sm },
+  bullet: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.primary,
+    marginTop: 8,
+    marginRight: spacing.sm
+  },
+  bulletText: {
     flex: 1,
     fontSize: typography.fontSize.md,
-    fontWeight: typography.fontWeight.medium,
-    color: colors.text
+    color: colors.text,
+    lineHeight: 20
   },
-  button: {
-    marginTop: spacing.md
+
+  contactRow: { marginTop: spacing.sm },
+  contactLabel: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.textMuted,
+    letterSpacing: 0.5,
+    marginBottom: 2
+  },
+  contactValue: { fontSize: typography.fontSize.md, color: colors.text },
+
+  primaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md,
+    borderRadius: 14,
+    marginTop: spacing.sm
+  },
+  primaryButtonText: {
+    color: colors.textWhite,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.bold,
+    marginLeft: spacing.sm
   }
 });
 
