@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert } from 'react-native';
 import { colors, spacing, typography } from '../../theme';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import Card from '../../components/common/Card';
 import NavigationHeader from '../../components/navigation/Header';
+import { useAuth } from '../../context/AuthContext';
 
 const ProfileScreen = ({ navigation }) => {
+  const { logout } = useAuth();
   const [profile, setProfile] = useState({
     firstName: 'Admin',
     lastName: 'User',
@@ -94,6 +96,18 @@ const ProfileScreen = ({ navigation }) => {
           title="Change Password"
           variant="outline"
           onPress={() => {}}
+          style={styles.button}
+        />
+
+        <Button
+          title="Log Out"
+          variant="outline"
+          onPress={() => {
+            Alert.alert('Log Out', 'Are you sure you want to log out?', [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Log Out', style: 'destructive', onPress: () => logout && logout() }
+            ]);
+          }}
           style={styles.button}
         />
       </View>

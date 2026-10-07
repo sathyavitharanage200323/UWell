@@ -9,6 +9,7 @@ import WelcomeScreen from '../screens/auth/WelcomeScreen';
 import LoginScreen from '../screens/auth/LoginScreen';
 import RegisterScreen from '../screens/auth/RegisterScreen';
 import LoadingScreen from '../screens/auth/LoadingScreen';
+import { USER_ROLES } from '../utils/constants';
 
 const Stack = createNativeStackNavigator();
 
@@ -26,13 +27,13 @@ const AuthNavigator = () => {
 
   if (isAuthenticated) {
     switch (user?.role) {
-      case 'student':
+      case USER_ROLES.STUDENT:
         return <StudentNavigator />;
-      case 'counselor':
+      case USER_ROLES.COUNSELOR:
         return <CounselorNavigator />;
-      case 'welfare':
+      case USER_ROLES.WELFARE:
         return <WelfareNavigator />;
-      case 'management':
+      case USER_ROLES.MANAGEMENT:
         return <ManagementNavigator />;
       default:
         return <WelcomeScreen />;

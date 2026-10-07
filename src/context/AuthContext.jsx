@@ -33,6 +33,9 @@ export const AuthProvider = ({ children }) => {
       setUser(userData);
       setIsAuthenticated(true);
       await AsyncStorage.setItem('user', JSON.stringify(userData));
+      if (userData.token) {
+        await AsyncStorage.setItem('token', userData.token);
+      }
     } catch (error) {
       console.error('Error during login:', error);
       throw error;
@@ -44,6 +47,7 @@ export const AuthProvider = ({ children }) => {
       setUser(null);
       setIsAuthenticated(false);
       await AsyncStorage.removeItem('user');
+      await AsyncStorage.removeItem('token');
     } catch (error) {
       console.error('Error during logout:', error);
     }
