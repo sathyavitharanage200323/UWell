@@ -26,4 +26,4 @@ export const SESSION_TYPES = {
   EMERGENCY: 'emergency'
 };
 
-export const API_BASE_URL = 'https://api.uwell.example.com/v1';
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://api.uwell.example.com/v1';

@@ -14,9 +14,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '../../theme';
 import { useWelfare } from '../../context/WelfareContext';
+import { useAuth } from '../../context/AuthContext';
 
 const ProfileScreen = ({ navigation }) => {
   const { profile, updateProfile } = useWelfare();
+  const { logout } = useAuth();
 
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState(profile || {});
@@ -216,7 +218,16 @@ const ProfileScreen = ({ navigation }) => {
                 </View>
               ))}
 
-              <TouchableOpacity style={styles.logoutBtn} activeOpacity={0.7}>
+              <TouchableOpacity
+                style={styles.logoutBtn}
+                onPress={() => {
+                  Alert.alert('Log Out', 'Are you sure you want to log out?', [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Log Out', style: 'destructive', onPress: () => logout && logout() }
+                  ]);
+                }}
+                activeOpacity={0.7}
+              >
                 <Text style={styles.logoutText}>Log Out</Text>
               </TouchableOpacity>
             </>

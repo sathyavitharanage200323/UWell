@@ -69,6 +69,33 @@ const RegisterScreen = ({ navigation }) => {
       <Text style={styles.title}>Register</Text>
       <Text style={styles.subtitle}>Create your account</Text>
 
+      <View style={styles.roleSelector}>
+        <Button
+          title="Student"
+          variant={formData.role === 'student' ? 'primary' : 'outline'}
+          onPress={() => updateField('role', 'student')}
+          style={styles.roleButton}
+        />
+        <Button
+          title="Counselor"
+          variant={formData.role === 'counselor' ? 'primary' : 'outline'}
+          onPress={() => updateField('role', 'counselor')}
+          style={styles.roleButton}
+        />
+        <Button
+          title="Welfare"
+          variant={formData.role === 'welfare' ? 'primary' : 'outline'}
+          onPress={() => updateField('role', 'welfare')}
+          style={styles.roleButton}
+        />
+        <Button
+          title="Management"
+          variant={formData.role === 'management' ? 'primary' : 'outline'}
+          onPress={() => updateField('role', 'management')}
+          style={styles.roleButton}
+        />
+      </View>
+
       <Input
         label="First Name"
         value={formData.firstName}
@@ -163,6 +190,17 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.lg,
     color: colors.textLight,
     marginBottom: spacing.xl
+  },
+  roleSelector: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: spacing.lg
+  },
+  roleButton: {
+    flex: 1,
+    minWidth: '45%',
+    marginRight: spacing.sm,
+    marginBottom: spacing.sm
   },
   button: {
     marginTop: spacing.md

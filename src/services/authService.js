@@ -12,21 +12,36 @@ export const authService = {
         id: 1,
         email: email || 'e.martinez@university.edu',
         role: role || 'counselor',
-        name: role === 'counselor' ? 'Dr. Evelyn Martinez' : 'Demo User'
+        name: role === 'counselor' ? 'Dr. Evelyn Martinez' : 'Demo User',
+        firstName: role === 'counselor' ? 'Evelyn' : 'Demo',
+        lastName: role === 'counselor' ? 'Martinez' : 'User'
       };
 
       if (role === 'counselor') {
+        const counselor = mockUsers.counselors[0];
         userData = {
-          ...mockUsers.counselors[0],
-          name: 'Dr. Evelyn Martinez',
+          ...counselor,
+          name: `${counselor.firstName} ${counselor.lastName}`,
           role: 'counselor'
         };
       } else if (role === 'student') {
-        userData = mockUsers.students[0];
+        const student = mockUsers.students[0];
+        userData = {
+          ...student,
+          name: `${student.firstName} ${student.lastName}`
+        };
       } else if (role === 'welfare') {
-        userData = mockUsers.welfare[0];
+        const welfare = mockUsers.welfare[0];
+        userData = {
+          ...welfare,
+          name: `${welfare.firstName} ${welfare.lastName}`
+        };
       } else if (role === 'management') {
-        userData = mockUsers.management[0];
+        const mgmt = mockUsers.management[0];
+        userData = {
+          ...mgmt,
+          name: `${mgmt.firstName} ${mgmt.lastName}`
+        };
       }
 
       return {
