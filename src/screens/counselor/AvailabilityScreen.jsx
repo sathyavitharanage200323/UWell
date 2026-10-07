@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,260 +9,341 @@ import {
   SafeAreaView,
   StatusBar,
   Modal,
-  Alert
+  Alert,
+  Animated,
+  Dimensions
 } from 'react-native';
-import { colors, spacing, typography } from '../../theme';
-import Card from '../../components/common/Card';
-import Input from '../../components/common/Input';
+import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { colors, spacing } from '../../theme';
 import { counselorService } from '../../services/counselorService';
 
-const DAYS_LIST = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const { width } = Dimensions.get('window');
 
+// ─── Constants ────────────────────────────────────────────────────────────
+const DAYS_LIST  = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const DAYS_SHORT = ['MON',    'TUE',     'WED',       'THU',      'FRI',     'SAT',      'SUN'];
+
+// All possible hourly slots shown in the "Active Hourly Slots" section
+const ALL_SLOTS = [
+  '09:00 AM', '10:00 AM', '11:00 AM', '01:00 PM',
+  '02:00 PM', '03:00 PM', '04:00 PM',
+];
+
+// ─── Day Row Component ────────────────────────────────────────────────────
+const DayRow = ({ item, shortName, onToggle, onEdit }) => {
+  const isActive = item.active;
+  return (
+    <View style={[styles.dayRow, !isActive && styles.dayRowInactive]}>
+      {/* Day badge */}
+      <View style={[styles.dayBadge, !isActive && styles.dayBadgeInactive]}>
+        <Text style={[styles.dayBadgeText, !isActive && styles.dayBadgeTextInactive]}>
+          {shortName}
+        </Text>
+      </View>
+
+      {/* Time / unavailable */}
+      <TouchableOpacity
+        style={styles.dayTimeRow}
+        onPress={() => isActive && onEdit(item)}
+        activeOpacity={isActive ? 0.7 : 1}
+      >
+        {isActive ? (
+          <>
+            <Feather name="clock" size={14} color={colors.primary} style={{ marginRight: 6 }} />
+            <Text style={styles.dayTimeText}>
+              {item.startTime} - {item.endTime}
+            </Text>
+          </>
+        ) : (
+          <>
+            <Feather name="slash" size={14} color={colors.textSecondary} style={{ marginRight: 6 }} />
+            <Text style={styles.dayUnavailText}>Unavailable</Text>
+          </>
+        )}
+      </TouchableOpacity>
+
+      {/* Status label */}
+      <View style={[styles.statusLabel, isActive ? styles.statusLabelActive : styles.statusLabelInactive]}>
+        <Text style={[styles.statusLabelText, isActive ? styles.statusLabelTextActive : styles.statusLabelTextInactive]}>
+          {isActive ? 'Available' : 'Unavailable'}
+        </Text>
+      </View>
+
+      {/* Toggle */}
+      <Switch
+        value={isActive}
+        onValueChange={() => onToggle(item.id, item.active)}
+        trackColor={{ false: '#D8D0CB', true: 'rgba(232,131,107,0.35)' }}
+        thumbColor={isActive ? colors.primary : '#F0EBE6'}
+        ios_backgroundColor="#D8D0CB"
+        style={{ marginLeft: 8 }}
+      />
+    </View>
+  );
+};
+
+// ─── Slot Chip Component ─────────────────────────────────────────────────
+const SlotChip = ({ time, active, onPress }) => (
+  <TouchableOpacity
+    style={[styles.slotChip, active && styles.slotChipActive]}
+    onPress={onPress}
+    activeOpacity={0.75}
+    accessibilityLabel={`${time} slot ${active ? 'selected' : 'unselected'}`}
+  >
+    <View style={[styles.slotDot, active && styles.slotDotActive]}>
+      {active && <Feather name="check" size={9} color={colors.white} />}
+    </View>
+    <Text style={[styles.slotText, active && styles.slotTextActive]}>{time}</Text>
+  </TouchableOpacity>
+);
+
+// ─── Main Screen ─────────────────────────────────────────────────────────
 const AvailabilityScreen = ({ navigation }) => {
-  const [schedule, setSchedule] = useState([]);
+  const [schedule, setSchedule]         = useState([]);
+  const [activeSlots, setActiveSlots]   = useState(['09:00 AM', '10:00 AM', '11:00 AM', '01:00 PM']);
   const [modalVisible, setModalVisible] = useState(false);
-  
-  // Form State for Add / Edit
-  const [editingId, setEditingId] = useState(null);
-  const [selectedDay, setSelectedDay] = useState('Monday');
-  const [startTime, setStartTime] = useState('09:00 AM');
-  const [endTime, setEndTime] = useState('05:00 PM');
+  const [editingItem, setEditingItem]   = useState(null);
+  const [startTime, setStartTime]       = useState('09:00 AM');
+  const [endTime, setEndTime]           = useState('05:00 PM');
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     loadAvailability();
+    Animated.timing(fadeAnim, { toValue: 1, duration: 420, useNativeDriver: true }).start();
   }, []);
 
   const loadAvailability = async () => {
     const data = await counselorService.getAvailability();
-    setSchedule(data);
+    // Ensure all 5 weekdays exist in the list
+    const merged = DAYS_LIST.slice(0, 5).map(day => {
+      const found = data.find(d => d.day === day);
+      return found || { id: `av-${day}`, day, active: false, startTime: '09:00 AM', endTime: '05:00 PM', slots: [] };
+    });
+    setSchedule(merged);
   };
 
-  const handleToggleDay = async (id, currentStatus) => {
-    const updated = await counselorService.updateAvailability(id, { active: !currentStatus });
-    setSchedule((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, active: !currentStatus } : item))
-    );
-  };
-
-  const openAddModal = () => {
-    setEditingId(null);
-    setSelectedDay('Monday');
-    setStartTime('09:00 AM');
-    setEndTime('05:00 PM');
-    setModalVisible(true);
+  const handleToggle = async (id, current) => {
+    await counselorService.updateAvailability(id, { active: !current });
+    setSchedule(prev => prev.map(item => item.id === id ? { ...item, active: !current } : item));
   };
 
   const openEditModal = (item) => {
-    setEditingId(item.id);
-    setSelectedDay(item.day);
+    setEditingItem(item);
     setStartTime(item.startTime);
     setEndTime(item.endTime);
     setModalVisible(true);
   };
 
-  const handleDeleteSlot = async (id) => {
-    Alert.alert(
-      'Delete Slot',
-      'Are you sure you want to delete this availability slot?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            await counselorService.deleteAvailability(id);
-            loadAvailability();
-          }
-        }
-      ]
+  const handleSaveModal = async () => {
+    if (!startTime || !endTime) {
+      Alert.alert('Required', 'Please enter both start and end times.');
+      return;
+    }
+    await counselorService.updateAvailability(editingItem.id, { startTime, endTime });
+    setSchedule(prev => prev.map(item =>
+      item.id === editingItem.id ? { ...item, startTime, endTime } : item
+    ));
+    setModalVisible(false);
+  };
+
+  const toggleSlot = (slot) => {
+    setActiveSlots(prev =>
+      prev.includes(slot) ? prev.filter(s => s !== slot) : [...prev, slot]
     );
   };
 
-  const handleSaveModal = async () => {
-    if (!selectedDay || !startTime || !endTime) {
-      Alert.alert('Validation Error', 'Day, Start Time, and End Time are required.');
-      return;
-    }
-
-    if (editingId) {
-      // Update existing
-      await counselorService.updateAvailability(editingId, {
-        day: selectedDay,
-        startTime,
-        endTime,
-        slots: [startTime, endTime]
-      });
-    } else {
-      // Create new
-      await counselorService.createAvailability({
-        day: selectedDay,
-        startTime,
-        endTime,
-        slots: [startTime, endTime]
-      });
-    }
-
-    setModalVisible(false);
-    loadAvailability();
-  };
-
-  const handleSaveActiveSchedule = () => {
-    Alert.alert('Success', 'Weekly active schedule updated and saved.');
+  const handleSave = () => {
+    Alert.alert('✅ Saved', 'Your active schedule has been updated successfully.');
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.creamBackground} />
-      
-      {/* Header bar */}
-      <View style={styles.topHeader}>
+
+      {/* ── Header ───────────────────────────────────────────── */}
+      <View style={styles.headerBar}>
         <TouchableOpacity
-          onPress={() => navigation.goBack()}
           style={styles.backBtn}
+          onPress={() => navigation.goBack()}
           accessibilityLabel="Go back"
         >
-          <Text style={styles.backBtnText}>←</Text>
+          <Feather name="chevron-left" size={22} color={colors.darkText} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Availability</Text>
-        <TouchableOpacity
-          onPress={openAddModal}
-          style={styles.addHeaderBtn}
-          accessibilityLabel="Add new slot"
-        >
-          <Text style={styles.addHeaderBtnText}>+ Add</Text>
+
+        <TouchableOpacity style={styles.bellBtn} accessibilityLabel="Notifications">
+          <Feather name="bell" size={20} color={colors.primary} />
+          <View style={styles.bellDot} />
         </TouchableOpacity>
       </View>
 
-      <ScrollView
-        style={styles.container}
+      <Animated.ScrollView
+        style={[styles.scroll, { opacity: fadeAnim }]}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.subTitle}>WEEKLY DAY ACTIVE</Text>
+        {/* ── Hero Section ─────────────────────────────────────── */}
+        <View style={styles.heroSection}>
+          <View style={styles.heroText}>
+            <Text style={styles.heroTitle}>Availability</Text>
+            <View style={styles.roleBadge}>
+              <Text style={styles.roleBadgeText}>CLINICIAN STAFF</Text>
+            </View>
+            <Text style={styles.heroSub}>
+              Set your weekly availability{'\n'}for student appointments
+            </Text>
+          </View>
 
-        {schedule.map((item) => (
-          <Card key={item.id} style={styles.dayCard}>
-            <View style={styles.dayHeaderRow}>
-              <View>
-                <Text style={styles.dayNameText}>{item.day}</Text>
-                <Text style={styles.hoursText}>
-                  {item.active ? `${item.startTime} – ${item.endTime}` : 'Unavailable'}
-                </Text>
+          {/* Decorative calendar illustration */}
+          <View style={styles.heroIllus}>
+            <View style={styles.illustCalendar}>
+              <View style={styles.illustCalTop} />
+              <View style={styles.illustCalBody}>
+                <Feather name="check-circle" size={20} color={colors.primary} />
               </View>
-              <View style={styles.rightActionsRow}>
-                <Switch
-                  value={item.active}
-                  onValueChange={() => handleToggleDay(item.id, item.active)}
-                  trackColor={{ false: colors.border, true: colors.primaryLight }}
-                  thumbColor={item.active ? colors.primary : colors.white}
+            </View>
+            <View style={styles.illustClock}>
+              <Ionicons name="time-outline" size={22} color={colors.primary} />
+            </View>
+            {/* Leaf dots */}
+            <View style={[styles.leafDot, { top: 8, right: 8 }]} />
+            <View style={[styles.leafDot, { bottom: 12, left: 10, width: 8, height: 8 }]} />
+          </View>
+        </View>
+
+        {/* ── Weekly Days Active ───────────────────────────────── */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <View style={styles.cardIconCircle}>
+              <MaterialCommunityIcons name="calendar-clock" size={20} color={colors.primary} />
+            </View>
+            <View>
+              <Text style={styles.cardTitle}>WEEKLY DAYS ACTIVE</Text>
+              <Text style={styles.cardSub}>Set the days and time ranges you are available</Text>
+            </View>
+          </View>
+
+          <View style={styles.daysList}>
+            {schedule.map((item, i) => (
+              <View key={item.id}>
+                <DayRow
+                  item={item}
+                  shortName={DAYS_SHORT[i]}
+                  onToggle={handleToggle}
+                  onEdit={openEditModal}
                 />
+                {i < schedule.length - 1 && <View style={styles.rowDivider} />}
               </View>
+            ))}
+          </View>
+        </View>
+
+        {/* ── Active Hourly Slots ──────────────────────────────── */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <View style={[styles.cardIconCircle, { backgroundColor: '#FDF1EC' }]}>
+              <Feather name="clock" size={20} color={colors.primary} />
             </View>
-
-            {item.active && item.slots && item.slots.length > 0 && (
-              <View style={styles.slotsWrapper}>
-                <Text style={styles.slotsLabel}>AVAILABLE HOURLY SLOTS</Text>
-                <View style={styles.chipsRow}>
-                  {item.slots.map((slot, index) => (
-                    <View key={index} style={styles.chip}>
-                      <Text style={styles.chipText}>{slot}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
-
-            <View style={styles.cardFooterActions}>
-              <TouchableOpacity
-                onPress={() => openEditModal(item)}
-                style={styles.editBtn}
-                accessibilityLabel={`Edit ${item.day} schedule`}
-              >
-                <Text style={styles.editBtnText}>Edit</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => handleDeleteSlot(item.id)}
-                style={styles.deleteBtn}
-                accessibilityLabel={`Delete ${item.day} schedule`}
-              >
-                <Text style={styles.deleteBtnText}>Delete</Text>
-              </TouchableOpacity>
+            <View>
+              <Text style={styles.cardTitle}>ACTIVE HOURLY SLOTS</Text>
+              <Text style={styles.cardSub}>Select the time slots you want to offer for appointments</Text>
             </View>
-          </Card>
-        ))}
+          </View>
 
+          <View style={styles.slotsGrid}>
+            {ALL_SLOTS.map(slot => (
+              <SlotChip
+                key={slot}
+                time={slot}
+                active={activeSlots.includes(slot)}
+                onPress={() => toggleSlot(slot)}
+              />
+            ))}
+          </View>
+        </View>
+
+        {/* ── Save Button ──────────────────────────────────────── */}
         <TouchableOpacity
-          style={styles.saveScheduleBtn}
-          onPress={handleSaveActiveSchedule}
+          style={styles.saveBtn}
+          onPress={handleSave}
+          activeOpacity={0.85}
           accessibilityLabel="Save Active Schedule"
         >
-          <Text style={styles.saveScheduleBtnText}>Save Active Schedule</Text>
+          <MaterialCommunityIcons name="content-save-outline" size={20} color={colors.white} style={{ marginRight: 10 }} />
+          <Text style={styles.saveBtnText}>Save Active Schedule</Text>
         </TouchableOpacity>
-      </ScrollView>
 
-      {/* Add / Edit Modal */}
+        <View style={{ height: 24 }} />
+      </Animated.ScrollView>
+
+      {/* ── Edit Time Modal ──────────────────────────────────────── */}
       <Modal
         visible={modalVisible}
         transparent
-        animationType="fade"
+        animationType="slide"
         onRequestClose={() => setModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>
-              {editingId ? 'Edit Availability Slot' : 'Add Availability Slot'}
-            </Text>
+          <View style={styles.modalSheet}>
+            {/* Handle bar */}
+            <View style={styles.modalHandle} />
 
-            <Text style={styles.fieldLabel}>Day of Week</Text>
-            <View style={styles.daySelectorRow}>
-              {DAYS_LIST.slice(0, 5).map((d) => (
+            <Text style={styles.modalTitle}>
+              Edit Hours — {editingItem?.day}
+            </Text>
+            <Text style={styles.modalSub}>Tap a time to select from presets</Text>
+
+            {/* Start time presets */}
+            <Text style={styles.modalFieldLabel}>Start Time</Text>
+            <View style={styles.presetRow}>
+              {['08:00 AM', '09:00 AM', '10:00 AM', '11:00 AM'].map(t => (
                 <TouchableOpacity
-                  key={d}
-                  style={[
-                    styles.dayChip,
-                    selectedDay === d && styles.dayChipActive
-                  ]}
-                  onPress={() => setSelectedDay(d)}
+                  key={t}
+                  style={[styles.presetChip, startTime === t && styles.presetChipActive]}
+                  onPress={() => setStartTime(t)}
                 >
-                  <Text
-                    style={[
-                      styles.dayChipText,
-                      selectedDay === d && styles.dayChipTextActive
-                    ]}
-                  >
-                    {d.substring(0, 3)}
+                  <Text style={[styles.presetChipText, startTime === t && styles.presetChipTextActive]}>
+                    {t.replace(':00', '')}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
 
-            <Input
-              label="Start Time"
-              placeholder="e.g. 09:00 AM"
-              value={startTime}
-              onChangeText={setStartTime}
-            />
+            {/* End time presets */}
+            <Text style={styles.modalFieldLabel}>End Time</Text>
+            <View style={styles.presetRow}>
+              {['12:00 PM', '01:00 PM', '03:00 PM', '05:00 PM'].map(t => (
+                <TouchableOpacity
+                  key={t}
+                  style={[styles.presetChip, endTime === t && styles.presetChipActive]}
+                  onPress={() => setEndTime(t)}
+                >
+                  <Text style={[styles.presetChipText, endTime === t && styles.presetChipTextActive]}>
+                    {t.replace(':00', '')}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
-            <Input
-              label="End Time"
-              placeholder="e.g. 05:00 PM"
-              value={endTime}
-              onChangeText={setEndTime}
-            />
+            {/* Summary */}
+            <View style={styles.modalSummary}>
+              <Feather name="clock" size={14} color={colors.primary} />
+              <Text style={styles.modalSummaryText}>
+                {'  '}{startTime}  →  {endTime}
+              </Text>
+            </View>
 
-            <View style={styles.modalButtonsRow}>
+            <View style={styles.modalBtnsRow}>
               <TouchableOpacity
-                style={[styles.modalBtn, styles.modalCancelBtn]}
+                style={styles.modalCancelBtn}
                 onPress={() => setModalVisible(false)}
               >
-                <Text style={styles.cancelText}>Cancel</Text>
+                <Text style={styles.modalCancelText}>Cancel</Text>
               </TouchableOpacity>
-
               <TouchableOpacity
-                style={[styles.modalBtn, styles.modalSaveBtn]}
+                style={styles.modalSaveBtn}
                 onPress={handleSaveModal}
               >
-                <Text style={styles.saveText}>Save Slot</Text>
+                <Text style={styles.modalSaveText}>Save Hours</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -272,218 +353,454 @@ const AvailabilityScreen = ({ navigation }) => {
   );
 };
 
+// ─── Styles ───────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  safeArea: {
+  safe: {
     flex: 1,
-    backgroundColor: colors.creamBackground
+    backgroundColor: colors.creamBackground,
   },
-  container: {
+  scroll: {
     flex: 1,
-    backgroundColor: colors.creamBackground
   },
   content: {
-    padding: spacing.md,
-    paddingBottom: spacing.xxl
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.xxl,
   },
-  topHeader: {
+
+  // ── Header bar ──────────────────────────────────────────────
+  headerBar: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     backgroundColor: colors.creamBackground,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border
   },
   backBtn: {
-    padding: spacing.xs
-  },
-  backBtnText: {
-    fontSize: 22,
-    color: colors.primary,
-    fontWeight: 'bold'
-  },
-  headerTitle: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.darkText
-  },
-  addHeaderBtn: {
-    backgroundColor: colors.softCoral,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: 8
-  },
-  addHeaderBtnText: {
-    fontSize: typography.fontSize.xs,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.primary
-  },
-  subTitle: {
-    fontSize: typography.fontSize.xs,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.textSecondary,
-    letterSpacing: 1,
-    marginBottom: spacing.sm
-  },
-  dayCard: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: colors.white,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    borderColor: colors.border
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  dayHeaderRow: {
+  bellBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  bellDot: {
+    position: 'absolute',
+    top: 8,
+    right: 9,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+    borderWidth: 1.5,
+    borderColor: colors.white,
+  },
+
+  // ── Hero ─────────────────────────────────────────────────────
+  heroSection: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center'
+    alignItems: 'center',
+    marginBottom: spacing.md,
+    marginTop: 4,
   },
-  dayNameText: {
-    fontSize: typography.fontSize.md,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.darkText
+  heroText: {
+    flex: 1,
   },
-  hoursText: {
-    fontSize: typography.fontSize.xs,
-    color: colors.textSecondary,
-    marginTop: 2
+  heroTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: colors.darkText,
+    lineHeight: 34,
+    marginBottom: 6,
   },
-  rightActionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center'
+  roleBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.softCoral,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 20,
+    marginBottom: 8,
   },
-  slotsWrapper: {
-    marginTop: spacing.sm,
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border
-  },
-  slotsLabel: {
-    fontSize: typography.fontSize.xs - 1,
-    fontWeight: typography.fontWeight.bold,
+  roleBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
     color: colors.primary,
-    marginBottom: spacing.xs
+    letterSpacing: 0.8,
   },
-  chipsRow: {
+  heroSub: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    lineHeight: 19,
+  },
+  heroIllus: {
+    width: 110,
+    height: 110,
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  illustCalendar: {
+    width: 72,
+    height: 78,
+    borderRadius: 14,
+    backgroundColor: colors.white,
+    overflow: 'hidden',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  illustCalTop: {
+    height: 18,
+    backgroundColor: colors.primary,
+  },
+  illustCalBody: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  illustClock: {
+    position: 'absolute',
+    bottom: 2,
+    right: 4,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.softCoral,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  leafDot: {
+    position: 'absolute',
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: 'rgba(80,200,120,0.35)',
+  },
+
+  // ── Cards ────────────────────────────────────────────────────
+  card: {
+    backgroundColor: colors.white,
+    borderRadius: 20,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    shadowColor: '#3D2C2E',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.07,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: spacing.md,
+  },
+  cardIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.softCoral,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  cardTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.darkText,
+    letterSpacing: 0.5,
+  },
+  cardSub: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+
+  // ── Day rows ─────────────────────────────────────────────────
+  daysList: {
+    gap: 0,
+  },
+  dayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    gap: 0,
+  },
+  dayRowInactive: {
+    opacity: 0.7,
+  },
+  dayBadge: {
+    width: 52,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: colors.softCoral,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    flexShrink: 0,
+  },
+  dayBadgeInactive: {
+    backgroundColor: '#F0EBE6',
+  },
+  dayBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.primary,
+    letterSpacing: 0.5,
+  },
+  dayBadgeTextInactive: {
+    color: colors.textSecondary,
+  },
+  dayTimeRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dayTimeText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: colors.darkText,
+  },
+  dayUnavailText: {
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  statusLabel: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    marginRight: 4,
+    flexShrink: 0,
+  },
+  statusLabelActive: {
+    backgroundColor: colors.statusGreenBg,
+  },
+  statusLabelInactive: {
+    backgroundColor: '#F0EBE6',
+  },
+  statusLabelText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  statusLabelTextActive: {
+    color: colors.statusGreenText,
+  },
+  statusLabelTextInactive: {
+    color: colors.textSecondary,
+  },
+  rowDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginLeft: 64,
+  },
+
+  // ── Hourly slots ─────────────────────────────────────────────
+  slotsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6
+    gap: 10,
+    marginTop: 4,
   },
-  chip: {
-    backgroundColor: colors.softCoral,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: 12
-  },
-  chipText: {
-    fontSize: typography.fontSize.xs,
-    color: colors.darkText,
-    fontWeight: typography.fontWeight.medium
-  },
-  cardFooterActions: {
+  slotChip: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginTop: spacing.sm,
-    gap: spacing.md
-  },
-  editBtnText: {
-    fontSize: typography.fontSize.xs,
-    color: colors.primary,
-    fontWeight: typography.fontWeight.bold
-  },
-  deleteBtnText: {
-    fontSize: typography.fontSize.xs,
-    color: colors.statusRedText,
-    fontWeight: typography.fontWeight.bold
-  },
-  saveScheduleBtn: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
-    borderRadius: 10,
     alignItems: 'center',
-    marginTop: spacing.md
+    gap: 6,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
   },
-  saveScheduleBtnText: {
+  slotChipActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.softCoral,
+  },
+  slotDot: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.white,
+  },
+  slotDotActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary,
+  },
+  slotText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: colors.textSecondary,
+  },
+  slotTextActive: {
+    color: colors.primary,
+    fontWeight: '600',
+  },
+
+  // ── Save button ──────────────────────────────────────────────
+  saveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    borderRadius: 18,
+    paddingVertical: 16,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  saveBtnText: {
     color: colors.white,
-    fontSize: typography.fontSize.md,
-    fontWeight: typography.fontWeight.bold
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
-  // Modal styles
+
+  // ── Edit modal ───────────────────────────────────────────────
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'center',
-    padding: spacing.lg
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
   },
-  modalContainer: {
+  modalSheet: {
     backgroundColor: colors.white,
-    borderRadius: 16,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     padding: spacing.lg,
-    borderColor: colors.border,
-    borderWidth: 1
+    paddingBottom: 40,
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.border,
+    alignSelf: 'center',
+    marginBottom: 20,
   },
   modalTitle: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.bold,
+    fontSize: 18,
+    fontWeight: '700',
     color: colors.darkText,
-    marginBottom: spacing.md,
-    textAlign: 'center'
+    marginBottom: 4,
   },
-  fieldLabel: {
-    fontSize: typography.fontSize.xs,
-    fontWeight: typography.fontWeight.bold,
+  modalSub: {
+    fontSize: 12,
     color: colors.textSecondary,
-    marginBottom: spacing.xs
+    marginBottom: spacing.md,
   },
-  daySelectorRow: {
+  modalFieldLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.textSecondary,
+    letterSpacing: 0.6,
+    marginBottom: 8,
+    marginTop: 4,
+  },
+  presetRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: spacing.md
+    gap: 8,
+    flexWrap: 'wrap',
+    marginBottom: spacing.md,
   },
-  dayChip: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: 8,
+  presetChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: colors.border,
     backgroundColor: colors.creamBackground,
-    borderWidth: 1,
-    borderColor: colors.border
   },
-  dayChipActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary
+  presetChipActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.softCoral,
   },
-  dayChipText: {
-    fontSize: typography.fontSize.xs,
-    color: colors.darkText
+  presetChipText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.textSecondary,
   },
-  dayChipTextActive: {
-    color: colors.white,
-    fontWeight: typography.fontWeight.bold
+  presetChipTextActive: {
+    color: colors.primary,
+    fontWeight: '700',
   },
-  modalButtonsRow: {
+  modalSummary: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: spacing.sm,
-    marginTop: spacing.md
+    alignItems: 'center',
+    backgroundColor: colors.softCoral,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: spacing.md,
   },
-  modalBtn: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: 8
+  modalSummaryText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  modalBtnsRow: {
+    flexDirection: 'row',
+    gap: 12,
   },
   modalCancelBtn: {
-    backgroundColor: colors.creamBackground
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    alignItems: 'center',
+    backgroundColor: colors.creamBackground,
   },
-  cancelText: {
-    color: colors.darkText,
-    fontWeight: typography.fontWeight.medium
+  modalCancelText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textSecondary,
   },
   modalSaveBtn: {
-    backgroundColor: colors.primary
+    flex: 2,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  saveText: {
+  modalSaveText: {
+    fontSize: 14,
+    fontWeight: '700',
     color: colors.white,
-    fontWeight: typography.fontWeight.bold
-  }
+  },
 });
 
 export default AvailabilityScreen;
