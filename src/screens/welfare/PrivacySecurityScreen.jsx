@@ -1,13 +1,64 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch } from 'react-native';
+import React from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Switch,
+  Alert
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '../../theme';
-import { privacySecurityData } from '../../data/welfareMockData';
+import { useWelfare } from '../../context/WelfareContext';
+
+const TIMEOUT_OPTIONS = ['5 minutes', '15 minutes', '30 minutes', '1 hour'];
 
 const PrivacySecurityScreen = ({ navigation }) => {
-  const [twoFactor, setTwoFactor] = useState(privacySecurityData.twoFactorEnabled);
-  const data = privacySecurityData;
+  const { privacy, updatePrivacy } = useWelfare();
+
+  if (!privacy) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <Ionicons name="arrow-back" size={22} color={colors.text} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Privacy & Security</Text>
+        </View>
+        <View style={styles.emptyBox}>
+          <Text style={styles.emptyText}>Loading settings...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ---------- UPDATE: toggle two-factor ----------
+  const handleToggle2FA = (value) => {
+    updatePrivacy({ twoFactorEnabled: value });
+  };
+
+  // ---------- UPDATE: change session timeout ----------
+  const handleChangeTimeout = () => {
+    Alert.alert(
+      'Session Timeout',
+      'Choose inactivity logout duration',
+      [
+        ...TIMEOUT_OPTIONS.map((opt) => ({
+          text: opt,
+          onPress: () => {
+            updatePrivacy({ sessionTimeout: opt });
+            Alert.alert('Updated', `Session timeout set to ${opt}.`);
+          }
+        })),
+        { text: 'Cancel', style: 'cancel' }
+      ],
+      { cancelable: true }
+    );
+  };
+
+  const data = privacy;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -23,7 +74,7 @@ const PrivacySecurityScreen = ({ navigation }) => {
           Manage your privacy settings and understand how student data is protected.
         </Text>
 
-        {/* Data Access Level */}
+        {/* Data Access Level (READ) */}
         <View style={styles.card}>
           <View style={styles.cardTopRow}>
             <Text style={styles.cardTitle}>Data Access Level</Text>
@@ -34,10 +85,10 @@ const PrivacySecurityScreen = ({ navigation }) => {
           <Text style={styles.bodyText}>{data.dataAccessLevel.description}</Text>
         </View>
 
-        {/* Confidentiality Agreement */}
+        {/* Confidentiality Agreement (READ) */}
         <View style={styles.card}>
           <View style={styles.cardTopRow}>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={styles.cardTitle}>Confidentiality Agreement</Text>
               <View style={styles.metaRow}>
                 <Text style={styles.metaLabel}>Signed Date</Text>
@@ -56,30 +107,36 @@ const PrivacySecurityScreen = ({ navigation }) => {
           </View>
         </View>
 
-        {/* Two-Factor Authentication */}
+        {/* Two-Factor Authentication (UPDATE) */}
         <View style={styles.card}>
           <View style={styles.rowBetween}>
             <View style={{ flex: 1 }}>
               <Text style={styles.cardTitle}>Two-Factor Authentication</Text>
-              <Text style={styles.bodyTextMuted}>Secure your account access</Text>
+              <Text style={styles.bodyTextMuted}>
+                {data.twoFactorEnabled
+                  ? 'Enabled — Secure your account access'
+                  : 'Disabled — Turn on for extra security'}
+              </Text>
             </View>
             <Switch
-              value={twoFactor}
-              onValueChange={setTwoFactor}
+              value={data.twoFactorEnabled}
+              onValueChange={handleToggle2FA}
               trackColor={{ false: colors.border, true: '#B7DCC5' }}
-              thumbColor={twoFactor ? '#397052' : '#F4F3F4'}
+              thumbColor={data.twoFactorEnabled ? '#397052' : '#F4F3F4'}
             />
           </View>
         </View>
 
-        {/* Session Timeout */}
-        <TouchableOpacity style={styles.card} activeOpacity={0.7}>
+        {/* Session Timeout (UPDATE) */}
+        <TouchableOpacity
+          style={styles.card}
+          activeOpacity={0.7}
+          onPress={handleChangeTimeout}
+        >
           <View style={styles.rowBetween}>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={styles.cardTitle}>Session Timeout</Text>
-              <Text style={styles.bodyTextMuted}>
-                Inactivity logout duration
-              </Text>
+              <Text style={styles.bodyTextMuted}>Inactivity logout duration</Text>
             </View>
             <View style={styles.rowRight}>
               <Text style={styles.valueText}>{data.sessionTimeout}</Text>
@@ -88,7 +145,7 @@ const PrivacySecurityScreen = ({ navigation }) => {
           </View>
         </TouchableOpacity>
 
-        {/* Data Handling Guidelines */}
+        {/* Data Handling Guidelines (navigate to content) */}
         <TouchableOpacity
           style={styles.card}
           activeOpacity={0.7}
@@ -109,6 +166,7 @@ const PrivacySecurityScreen = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.creamBackground },
+
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -122,6 +180,9 @@ const styles = StyleSheet.create({
     color: colors.text
   },
   scrollContent: { padding: spacing.lg, paddingTop: 0, paddingBottom: spacing.xxl },
+
+  emptyBox: { alignItems: 'center', paddingVertical: spacing.xxl },
+  emptyText: { fontSize: typography.fontSize.md, color: colors.textMuted },
 
   subtitle: {
     fontSize: typography.fontSize.md,

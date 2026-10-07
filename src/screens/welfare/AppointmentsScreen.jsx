@@ -1,11 +1,18 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  RefreshControl
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '../../theme';
-import { welfareAppointments } from '../../data/welfareMockData';
+import { useWelfare } from '../../context/WelfareContext';
 
-const TABS = ['All', 'Upcoming', 'Completed'];
+const TABS = ['All', 'Upcoming', 'Completed', 'Cancelled'];
 
 const statusStyles = {
   Upcoming: { bg: '#FBE1DE', text: '#C0392B' },
@@ -14,20 +21,30 @@ const statusStyles = {
 };
 
 const AppointmentsScreen = ({ navigation }) => {
-  const [activeTab, setActiveTab] = useState('Upcoming');
+  const { getAppointments } = useWelfare();
+  const [activeTab, setActiveTab] = useState('All');
+  const [refreshing, setRefreshing] = useState(false);
 
-  const filtered = useMemo(() => {
-    if (activeTab === 'All') return welfareAppointments;
-    return welfareAppointments.filter((a) => a.status === activeTab);
-  }, [activeTab]);
+  const list = getAppointments(activeTab);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    setTimeout(() => setRefreshing(false), 500);
+  };
+
+  const handleBack = () => {
+    const parent = navigation.getParent();
+    if (parent) parent.navigate('Dashboard');
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <TouchableOpacity onPress={handleBack} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={22} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Appointments</Text>
+        <Text style={styles.headerCount}>{list.length}</Text>
       </View>
 
       {/* Tabs */}
@@ -48,11 +65,24 @@ const AppointmentsScreen = ({ navigation }) => {
         })}
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {filtered.length === 0 ? (
-          <Text style={styles.emptyText}>No {activeTab.toLowerCase()} appointments.</Text>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+          />
+        }
+      >
+        {list.length === 0 ? (
+          <View style={styles.emptyBox}>
+            <Ionicons name="calendar-outline" size={42} color={colors.textMuted} />
+            <Text style={styles.emptyText}>No {activeTab.toLowerCase()} appointments.</Text>
+          </View>
         ) : (
-          filtered.map((apt) => {
+          list.map((apt) => {
             const st = statusStyles[apt.status] || statusStyles.Upcoming;
             return (
               <TouchableOpacity
@@ -90,6 +120,7 @@ const AppointmentsScreen = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.creamBackground },
+
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -98,9 +129,19 @@ const styles = StyleSheet.create({
   },
   backBtn: { padding: spacing.xs, marginRight: spacing.sm },
   headerTitle: {
+    flex: 1,
     fontSize: typography.fontSize.xxl,
     fontWeight: typography.fontWeight.bold,
     color: colors.text
+  },
+  headerCount: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.primary,
+    backgroundColor: colors.softCoral,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10
   },
 
   tabRow: {
@@ -109,7 +150,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border
   },
-  tab: { marginRight: spacing.xl, paddingBottom: spacing.sm, alignItems: 'center' },
+  tab: { marginRight: spacing.lg, paddingBottom: spacing.sm, alignItems: 'center' },
   tabText: {
     fontSize: typography.fontSize.md,
     color: colors.textMuted,
@@ -126,11 +167,12 @@ const styles = StyleSheet.create({
   },
 
   scrollContent: { padding: spacing.lg, paddingBottom: spacing.xxl },
+
+  emptyBox: { alignItems: 'center', paddingVertical: spacing.xxl },
   emptyText: {
     fontSize: typography.fontSize.md,
     color: colors.textMuted,
-    textAlign: 'center',
-    marginTop: spacing.xl
+    marginTop: spacing.md
   },
 
   card: {
