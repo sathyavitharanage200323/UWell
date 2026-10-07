@@ -289,3 +289,95 @@ export const initialAvailabilitySchedule = [
     slots: ['09:00 AM', '10:00 AM', '11:00 AM']
   }
 ];
+
+// ─── Clinical Focus Areas — rich data for list + detail screens ──────────────
+export const initialClinicalFocusAreas = [
+  {
+    id: 'focus-1',
+    key: 'Academic Burnout',
+    subtitle: 'Understanding academic pressure and restoring balance.',
+    description: 'Support with overwhelming workload, low motivation, and academic pressure.',
+    cardColor: '#FDF1EC',
+    iconLib: 'Ionicons',
+    iconName: 'school-outline',
+    accentColor: '#E8836B',
+    howWeCanHelp: [
+      'Managing academic pressure and workload',
+      'Building healthy study routines',
+      'Improving motivation and engagement',
+      'Preventing emotional exhaustion',
+    ],
+    commonExperiences: [
+      'Feeling overwhelmed by deadlines',
+      'Constant tiredness and low energy',
+      'Difficulty concentrating',
+      'Loss of motivation',
+    ],
+  },
+  {
+    id: 'focus-2',
+    key: 'ADHD Management',
+    subtitle: 'Building focus and structure for academic success.',
+    description: 'Strategies for focus, organisation, time management and reducing distractions.',
+    cardColor: '#EAF3FF',
+    iconLib: 'MaterialCommunityIcons',
+    iconName: 'brain',
+    accentColor: '#4A90E2',
+    howWeCanHelp: [
+      'Strategies for sustained focus',
+      'Time management and planning tools',
+      'Reducing distractions in study environments',
+      'Organisation and task prioritisation',
+    ],
+    commonExperiences: [
+      'Struggling to start or finish tasks',
+      'Forgetfulness and losing track of time',
+      'Impulsive decisions under stress',
+      'Difficulty sitting still or staying on topic',
+    ],
+  },
+  {
+    id: 'focus-3',
+    key: 'Anxiety Disorder',
+    subtitle: 'Reducing worry and building healthier coping strategies.',
+    description: 'Support for excessive worry, stress, panic, and building healthier coping strategies.',
+    cardColor: '#E8F8EF',
+    iconLib: 'Feather',
+    iconName: 'heart',
+    accentColor: '#397052',
+    howWeCanHelp: [
+      'CBT techniques for managing worry',
+      'Breathing and grounding exercises',
+      'Identifying anxiety triggers',
+      'Building confidence in social situations',
+    ],
+    commonExperiences: [
+      'Excessive worry about exams or the future',
+      'Physical symptoms like racing heart',
+      'Avoiding situations that feel overwhelming',
+      'Difficulty sleeping due to anxious thoughts',
+    ],
+  },
+  {
+    id: 'focus-4',
+    key: 'Social Adjustment',
+    subtitle: 'Guidance for relationships and adapting to university life.',
+    description: 'Guidance for relationships, communication and adapting to university life.',
+    cardColor: '#F3EEFF',
+    iconLib: 'Ionicons',
+    iconName: 'people-outline',
+    accentColor: '#7C5CBF',
+    howWeCanHelp: [
+      'Building communication and social skills',
+      'Managing homesickness and culture shock',
+      'Navigating friendships and peer relationships',
+      'Adapting to university independence',
+    ],
+    commonExperiences: [
+      'Feeling lonely or out of place',
+      'Difficulty making or keeping friendships',
+      'Homesickness or missing familiar routines',
+      'Struggling with identity or belonging',
+    ],
+  },
+];

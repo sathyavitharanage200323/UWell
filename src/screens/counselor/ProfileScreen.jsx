@@ -15,6 +15,7 @@ import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, spacing } from '../../theme';
 import { useAuth } from '../../context/AuthContext';
 import { counselorService } from '../../services/counselorService';
+import { initialClinicalFocusAreas } from '../../data/counselorMockData';
 
 const { width } = Dimensions.get('window');
 
@@ -78,6 +79,17 @@ const ProfileScreen = ({ navigation }) => {
   const focus = profile?.clinicalFocus || [
     'Academic Burnout', 'ADHD Management', 'Anxiety Disorder', 'Social Adjustment',
   ];
+
+  // Navigate to the full list screen or directly to a detail card
+  const handleSeeAll = () => navigation.navigate('ClinicalFocusAreas');
+  const handleFocusCard = (itemKey) => {
+    const area = initialClinicalFocusAreas.find(a => a.key === itemKey);
+    if (area) {
+      navigation.navigate('FocusAreaDetail', { area });
+    } else {
+      navigation.navigate('ClinicalFocusAreas');
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -202,7 +214,12 @@ const ProfileScreen = ({ navigation }) => {
               <Text style={styles.sectionSub}>Key areas you support students with</Text>
             </View>
           </View>
-          <TouchableOpacity>
+          {/* ── WIRED: See All navigates to full list screen ── */}
+          <TouchableOpacity
+            onPress={handleSeeAll}
+            accessibilityLabel="See all clinical focus areas"
+            accessibilityRole="button"
+          >
             <Text style={styles.seeAll}>See All ›</Text>
           </TouchableOpacity>
         </View>
@@ -211,11 +228,14 @@ const ProfileScreen = ({ navigation }) => {
           {focus.map((item, i) => {
             const cfg = FOCUS_ICONS[item] || { bg: colors.softCoral, color: colors.primary };
             return (
+              // ── WIRED: each card navigates to its detail screen ──
               <TouchableOpacity
                 key={i}
                 style={styles.focusCard}
                 activeOpacity={0.8}
-                accessibilityLabel={item}
+                accessibilityLabel={`${item}. Tap to view details.`}
+                accessibilityRole="button"
+                onPress={() => handleFocusCard(item)}
               >
                 <View style={[styles.focusIconCircle, { backgroundColor: cfg.bg }]}>
                   <FocusIcon name={item} />

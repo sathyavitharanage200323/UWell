@@ -13,6 +13,8 @@ import AvailabilityScreen from '../screens/counselor/AvailabilityScreen';
 import VideoSessionScreen from '../screens/counselor/VideoSessionScreen';
 import ProfileScreen from '../screens/counselor/ProfileScreen';
 import EditProfileScreen from '../screens/counselor/EditProfileScreen';
+import ClinicalFocusAreasScreen from '../screens/counselor/ClinicalFocusAreasScreen';
+import FocusAreaDetailScreen from '../screens/counselor/FocusAreaDetailScreen';
 import { colors } from '../theme';
 
 const Tab = createBottomTabNavigator();
@@ -38,6 +40,9 @@ const ProfileStackScreen = () => (
   <ProfileStack.Navigator screenOptions={{ headerShown: false }}>
     <ProfileStack.Screen name="Profile" component={ProfileScreen} />
     <ProfileStack.Screen name="EditProfile" component={EditProfileScreen} />
+    {/* ── New clinical focus screens ── */}
+    <ProfileStack.Screen name="ClinicalFocusAreas" component={ClinicalFocusAreasScreen} />
+    <ProfileStack.Screen name="FocusAreaDetail" component={FocusAreaDetailScreen} />
   </ProfileStack.Navigator>
 );
 
@@ -92,9 +97,7 @@ const CounselorNavigator = () => {
         <Tab.Screen
           name="Appointments"
           component={AppointmentsScreen}
-          options={{
-            tabBarBadge: undefined,
-          }}
+          options={{ tabBarBadge: undefined }}
         />
         <Tab.Screen name="Students" component={StudentsStackScreen} />
         <Tab.Screen name="Messages" component={MessagesStackScreen} />
