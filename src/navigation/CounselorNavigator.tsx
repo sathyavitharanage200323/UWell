@@ -1,7 +1,8 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import DashboardScreen from '../screens/counselor/DashboardScreen';
 import AppointmentsScreen from '../screens/counselor/AppointmentsScreen';
 import StudentListScreen from '../screens/counselor/StudentListScreen';
@@ -13,7 +14,6 @@ import VideoSessionScreen from '../screens/counselor/VideoSessionScreen';
 import ProfileScreen from '../screens/counselor/ProfileScreen';
 import EditProfileScreen from '../screens/counselor/EditProfileScreen';
 import { colors } from '../theme';
-import { tabScreenOptions } from './TabHelpers';
 
 const Tab = createBottomTabNavigator();
 const StudentsStack = createNativeStackNavigator();
@@ -41,26 +41,61 @@ const ProfileStackScreen = () => (
   </ProfileStack.Navigator>
 );
 
+type TabIconProps = { focused: boolean; color: string; size: number };
+
+const tabIconMap: Record<string, (props: TabIconProps) => React.ReactElement> = {
+  Dashboard: ({ focused, color }) => (
+    <Ionicons name={focused ? 'bar-chart' : 'bar-chart-outline'} size={22} color={color} />
+  ),
+  Appointments: ({ focused, color }) => (
+    <Ionicons name={focused ? 'calendar' : 'calendar-outline'} size={22} color={color} />
+  ),
+  Students: ({ focused, color }) => (
+    <Ionicons name={focused ? 'people' : 'people-outline'} size={22} color={color} />
+  ),
+  Messages: ({ focused, color }) => (
+    <Ionicons name={focused ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline'} size={22} color={color} />
+  ),
+  Profile: ({ focused, color }) => (
+    <Ionicons name={focused ? 'person' : 'person-outline'} size={22} color={color} />
+  ),
+};
+
 const CounselorNavigator = () => {
   return (
     <View style={styles.container}>
       <Tab.Navigator
-        screenOptions={({ route }) => {
-          const icons: Record<string, string> = {
-            Dashboard: '📊',
-            Appointments: '📅',
-            Students: '👥',
-            Messages: '💬',
-            Profile: '👤',
-          };
-          return {
-            ...tabScreenOptions(icons[route.name] || '📊'),
-            contentStyle: { backgroundColor: colors.creamBackground },
-          };
-        }}
+        screenOptions={({ route }) => ({
+          headerShown: false,
+          tabBarIcon: (props) => {
+            const IconComponent = tabIconMap[route.name];
+            return IconComponent ? IconComponent(props) : null;
+          },
+          tabBarActiveTintColor: colors.primary,
+          tabBarInactiveTintColor: colors.textSecondary,
+          tabBarStyle: {
+            backgroundColor: colors.white,
+            borderTopWidth: 1,
+            borderTopColor: colors.border,
+            height: Platform.OS === 'ios' ? 82 : 64,
+            paddingBottom: Platform.OS === 'ios' ? 20 : 8,
+            paddingTop: 6,
+          },
+          tabBarLabelStyle: {
+            fontSize: 10,
+            fontWeight: '500',
+            marginTop: 2,
+          },
+        })}
       >
         <Tab.Screen name="Dashboard" component={DashboardScreen} />
-        <Tab.Screen name="Appointments" component={AppointmentsScreen} />
+        <Tab.Screen
+          name="Appointments"
+          component={AppointmentsScreen}
+          options={{
+            tabBarBadge: undefined,
+          }}
+        />
         <Tab.Screen name="Students" component={StudentsStackScreen} />
         <Tab.Screen name="Messages" component={MessagesStackScreen} />
         <Tab.Screen name="Profile" component={ProfileStackScreen} />
