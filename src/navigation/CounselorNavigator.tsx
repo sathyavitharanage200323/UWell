@@ -9,8 +9,6 @@ import StudentListScreen from '../screens/counselor/StudentListScreen';
 import StudentSessionScreen from '../screens/counselor/StudentSessionScreen';
 import MessagesScreen from '../screens/counselor/MessagesScreen';
 import StudentChatScreen from '../screens/counselor/StudentChatScreen';
-import AvailabilityScreen from '../screens/counselor/AvailabilityScreen';
-import VideoSessionScreen from '../screens/counselor/VideoSessionScreen';
 import ProfileScreen from '../screens/counselor/ProfileScreen';
 import EditProfileScreen from '../screens/counselor/EditProfileScreen';
 import ClinicalFocusAreasScreen from '../screens/counselor/ClinicalFocusAreasScreen';
@@ -40,7 +38,6 @@ const ProfileStackScreen = () => (
   <ProfileStack.Navigator screenOptions={{ headerShown: false }}>
     <ProfileStack.Screen name="Profile" component={ProfileScreen} />
     <ProfileStack.Screen name="EditProfile" component={EditProfileScreen} />
-    {/* ── New clinical focus screens ── */}
     <ProfileStack.Screen name="ClinicalFocusAreas" component={ClinicalFocusAreasScreen} />
     <ProfileStack.Screen name="FocusAreaDetail" component={FocusAreaDetailScreen} />
   </ProfileStack.Navigator>
