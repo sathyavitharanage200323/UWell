@@ -465,6 +465,54 @@ const calStyles = StyleSheet.create({
 });
 
 // ─────────────────────────────────────────────────────────────────────────
+// Time/Slot Helper Functions
+// ─────────────────────────────────────────────────────────────────────────
+const timeToMinutes = (timeStr) => {
+  if (!timeStr) return 0;
+  const [time, period] = timeStr.split(' ');
+  let [hours, minutes] = time.split(':').map(Number);
+  if (period === 'PM' && hours !== 12) hours += 12;
+  if (period === 'AM' && hours === 12) hours = 0;
+  return hours * 60 + minutes;
+};
+
+const minutesToTime = (mins) => {
+  let hours = Math.floor(mins / 60);
+  const minutes = mins % 60;
+  const period = hours >= 12 ? 'PM' : 'AM';
+  if (hours > 12) hours -= 12;
+  if (hours === 0) hours = 12;
+  return `${hours}:${minutes.toString().padStart(2, '0')} ${period}`;
+};
+
+const generateSlots = (startTime, endTime, duration = 30, breakStart = null, breakEnd = null) => {
+  const slots = [];
+  let current = timeToMinutes(startTime);
+  const end = timeToMinutes(endTime);
+  const bStart = breakStart ? timeToMinutes(breakStart) : null;
+  const bEnd = breakEnd ? timeToMinutes(breakEnd) : null;
+
+  while (current + duration <= end) {
+    if (bStart !== null && bEnd !== null && current >= bStart && current < bEnd) {
+      current = bEnd;
+      continue;
+    }
+    slots.push(minutesToTime(current));
+    current += duration;
+  }
+  return slots;
+};
+
+const getDayName = (date) => {
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  return days[date.getDay()];
+};
+
+const sortSlots = (slots) => {
+  return [...slots].sort((a, b) => timeToMinutes(a) - timeToMinutes(b));
+};
+
+// ─────────────────────────────────────────────────────────────────────────
 // Main Screen
 // ─────────────────────────────────────────────────────────────────────────
 const AvailabilityScreen = ({ navigation }) => {
@@ -480,14 +528,50 @@ const AvailabilityScreen = ({ navigation }) => {
   const [startTime,    setStartTime]    = useState('09:00 AM');
   const [endTime,      setEndTime]      = useState('05:00 PM');
 
+  // Quick Setup modal state
+  const [quickSetupVisible, setQuickSetupVisible] = useState(false);
+  const [quickSetupDays, setQuickSetupDays] = useState([true, true, true, true, true]);
+  const [quickSetupStart, setQuickSetupStart] = useState('09:00 AM');
+  const [quickSetupEnd, setQuickSetupEnd] = useState('05:00 PM');
+  const [quickSetupDuration, setQuickSetupDuration] = useState(30);
+  const [quickSetupBreakStart, setQuickSetupBreakStart] = useState('12:00 PM');
+  const [quickSetupBreakEnd, setQuickSetupBreakEnd] = useState('01:00 PM');
+  const [quickSetupUseBreak, setQuickSetupUseBreak] = useState(true);
+
+  // Add Slot modal state
+  const [addSlotVisible, setAddSlotVisible] = useState(false);
+  const [addSlotTime, setAddSlotTime] = useState('09:00 AM');
+  const [addSlotError, setAddSlotError] = useState('');
+
   // Animations
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const floatAnim = useRef(new Animated.Value(0)).current;
 
-  // Mock booked dates (green dots)
-  const yr = todayDate.getFullYear();
-  const mo = todayDate.getMonth() + 1;
-  const bookedDates = [5,7,12,16,19,23,26,28,30].map(d => `${yr}-${mo}-${d}`);
+  const bookedDates = schedule
+    .filter(item => item.active && item.slots && item.slots.length > 0)
+    .map(item => {
+      const dayIndex = DAYS_LIST.indexOf(item.day);
+      const today = new Date();
+      const currentDay = today.getDay();
+      const diff = (dayIndex + 1) - currentDay;
+      const targetDate = new Date(today);
+      targetDate.setDate(today.getDate() + diff);
+      return `${targetDate.getFullYear()}-${targetDate.getMonth() + 1}-${targetDate.getDate()}`;
+    });
+
+  const selectedDayName = getDayName(selectedDate);
+  const selectedDayItem = schedule.find(d => d.day === selectedDayName);
+  const selectedDaySlots = schedule.length === 0
+    ? ALL_SLOTS
+    : selectedDayItem
+    ? sortSlots([...new Set([
+        ...ALL_SLOTS.filter(t => {
+          const m = timeToMinutes(t);
+          return m >= timeToMinutes(selectedDayItem.startTime) && m < timeToMinutes(selectedDayItem.endTime);
+        }),
+        ...(selectedDayItem.slots || []),
+      ])])
+    : [];
 
   useEffect(() => {
     loadAvailability();
@@ -504,6 +588,17 @@ const AvailabilityScreen = ({ navigation }) => {
     return () => floatLoop.stop();
   }, []);
 
+  useEffect(() => {
+    if (schedule.length === 0) return;
+    const dayName = getDayName(selectedDate);
+    const dayItem = schedule.find(d => d.day === dayName);
+    if (dayItem && dayItem.slots) {
+      setActiveSlots(dayItem.slots);
+    } else {
+      setActiveSlots([]);
+    }
+  }, [selectedDate, schedule]);
+
   const loadAvailability = async () => {
     const data = await counselorService.getAvailability();
     const merged = DAYS_LIST.map(day => {
@@ -511,6 +606,12 @@ const AvailabilityScreen = ({ navigation }) => {
       return found ?? { id: `av-${day}`, day, active: false, startTime: '09:00 AM', endTime: '05:00 PM', slots: [] };
     });
     setSchedule(merged);
+
+    const todayDay = getDayName(new Date());
+    const todayItem = merged.find(d => d.day === todayDay);
+    if (todayItem && todayItem.slots) {
+      setActiveSlots(todayItem.slots);
+    }
   };
 
   const handleToggle = async (id, current) => {
@@ -537,13 +638,114 @@ const AvailabilityScreen = ({ navigation }) => {
     setModalVisible(false);
   };
 
-  const toggleSlot = slot =>
-    setActiveSlots(prev => prev.includes(slot) ? prev.filter(s => s !== slot) : [...prev, slot]);
+  const toggleSlot = slot => {
+    const next = activeSlots.includes(slot)
+      ? activeSlots.filter(s => s !== slot)
+      : [...activeSlots, slot];
+    setActiveSlots(next);
+    const dayName = getDayName(selectedDate);
+    setSchedule(prev => prev.map(it =>
+      it.day === dayName ? { ...it, slots: sortSlots(next) } : it
+    ));
+  };
 
-  const handleAddSlot   = () => Alert.alert('Add Slot', 'Custom slot entry coming soon.');
-  const handleQuickSetup = () => Alert.alert('Quick Setup', 'Quick schedule configuration coming soon.');
-  const handleSave = () =>
-    Alert.alert('✅ Availability updated', 'Your schedule has been saved successfully.');
+  const handleQuickSetup = () => {
+    setQuickSetupVisible(true);
+  };
+
+  const handleQuickSetupApply = async () => {
+    const breakStart = quickSetupUseBreak ? quickSetupBreakStart : null;
+    const breakEnd = quickSetupUseBreak ? quickSetupBreakEnd : null;
+
+    const newSchedule = schedule.map((item, i) => {
+      if (!quickSetupDays[i]) {
+        return { ...item, active: false, slots: [] };
+      }
+      const slots = generateSlots(quickSetupStart, quickSetupEnd, quickSetupDuration, breakStart, breakEnd);
+      return { ...item, active: true, startTime: quickSetupStart, endTime: quickSetupEnd, slots };
+    });
+
+    setSchedule(newSchedule);
+
+    for (const item of newSchedule) {
+      await counselorService.updateAvailability(item.id, {
+        active: item.active,
+        startTime: item.startTime,
+        endTime: item.endTime,
+        slots: item.slots,
+      });
+    }
+
+    setQuickSetupVisible(false);
+  };
+
+  const handleAddSlot = () => {
+    const dayName = getDayName(selectedDate);
+    const dayItem = schedule.find(d => d.day === dayName);
+    if (dayItem) {
+      setAddSlotTime(dayItem.startTime);
+      setAddSlotError('');
+    } else {
+      setAddSlotTime('09:00 AM');
+      setAddSlotError(`${dayName} is not in your weekly schedule. Slots can only be added on working days.`);
+    }
+    setAddSlotVisible(true);
+  };
+
+  const handleAddSlotSave = async () => {
+    const dayName = getDayName(selectedDate);
+    const dayItem = schedule.find(d => d.day === dayName);
+    if (!dayItem) {
+      setAddSlotError(`${dayName} is not in your weekly schedule. Slots can only be added on working days.`);
+      return;
+    }
+
+    const newSlot = addSlotTime;
+    const dayStart = timeToMinutes(dayItem.startTime);
+    const dayEnd = timeToMinutes(dayItem.endTime);
+    const slotTime = timeToMinutes(newSlot);
+
+    if (slotTime < dayStart || slotTime >= dayEnd) {
+      setAddSlotError(`Slot must be between ${dayItem.startTime} and ${dayItem.endTime}`);
+      return;
+    }
+
+    const renderedSlots = sortSlots([...new Set([
+      ...ALL_SLOTS.filter(t => {
+        const m = timeToMinutes(t);
+        return m >= dayStart && m < dayEnd;
+      }),
+      ...(dayItem.slots || []),
+    ])]);
+    if (renderedSlots.includes(newSlot)) {
+      setAddSlotError('This slot already exists in the list. Tap its chip to select it instead.');
+      return;
+    }
+
+    const newSlots = sortSlots([...dayItem.slots, newSlot]);
+    const updatedItem = { ...dayItem, slots: newSlots };
+    setSchedule(prev => prev.map(it => it.id === dayItem.id ? updatedItem : it));
+    setActiveSlots(newSlots);
+
+    await counselorService.updateAvailability(dayItem.id, { slots: newSlots });
+    setAddSlotVisible(false);
+  };
+
+  const handleSave = async () => {
+    try {
+      for (const item of schedule) {
+        await counselorService.updateAvailability(item.id, {
+          active: item.active,
+          startTime: item.startTime,
+          endTime: item.endTime,
+          slots: item.slots,
+        });
+      }
+      Alert.alert('Success', 'Your availability has been saved.');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to save availability. Please try again.');
+    }
+  };
 
   // ── Render ──────────────────────────────────────────────────────────────
   return (
@@ -680,7 +882,11 @@ const AvailabilityScreen = ({ navigation }) => {
           />
 
           <View style={s.slotsGrid}>
-            {ALL_SLOTS.map(slot => (
+            {selectedDaySlots.length === 0 ? (
+              <Text style={s.noSlotsText}>
+                No slots for this date. Use Quick Setup or Add Slot to create one.
+              </Text>
+            ) : selectedDaySlots.map(slot => (
               <SlotChip
                 key={slot}
                 time={slot}
@@ -767,6 +973,192 @@ const AvailabilityScreen = ({ navigation }) => {
               </TouchableOpacity>
               <TouchableOpacity style={s.modalSaveBtn} onPress={handleSaveModal}>
                 <Text style={s.modalSaveText}>Save Hours</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Quick Setup modal ─────────────────────────────────────── */}
+      <Modal
+        visible={quickSetupVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setQuickSetupVisible(false)}
+      >
+        <View style={s.modalOverlay}>
+          <View style={s.modalSheet}>
+            <View style={s.modalHandle} />
+            <Text style={s.modalTitle}>Quick Setup</Text>
+            <Text style={s.modalSub}>Configure your weekly availability</Text>
+
+            <Text style={s.modalFieldLabel}>WORKING DAYS</Text>
+            <View style={s.quickSetupDaysRow}>
+              {DAYS_LIST.map((day, i) => (
+                <TouchableOpacity
+                  key={day}
+                  style={[s.quickSetupDayChip, quickSetupDays[i] && s.quickSetupDayChipActive]}
+                  onPress={() => {
+                    const newDays = [...quickSetupDays];
+                    newDays[i] = !newDays[i];
+                    setQuickSetupDays(newDays);
+                  }}
+                  accessibilityLabel={day}
+                >
+                  <Text style={[s.quickSetupDayText, quickSetupDays[i] && s.quickSetupDayTextActive]}>
+                    {DAYS_SHORT[i]}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={s.modalFieldLabel}>START TIME</Text>
+            <View style={s.presetRow}>
+              {['08:00 AM','09:00 AM','10:00 AM','11:00 AM'].map(t => (
+                <TouchableOpacity
+                  key={t}
+                  style={[s.presetChip, quickSetupStart === t && s.presetChipActive]}
+                  onPress={() => setQuickSetupStart(t)}
+                  accessibilityLabel={t}
+                >
+                  <Text style={[s.presetText, quickSetupStart === t && s.presetTextActive]}>
+                    {t.replace(':00', '')}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={s.modalFieldLabel}>END TIME</Text>
+            <View style={s.presetRow}>
+              {['12:00 PM','01:00 PM','03:00 PM','05:00 PM'].map(t => (
+                <TouchableOpacity
+                  key={t}
+                  style={[s.presetChip, quickSetupEnd === t && s.presetChipActive]}
+                  onPress={() => setQuickSetupEnd(t)}
+                  accessibilityLabel={t}
+                >
+                  <Text style={[s.presetText, quickSetupEnd === t && s.presetTextActive]}>
+                    {t.replace(':00', '')}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={s.modalFieldLabel}>SLOT DURATION</Text>
+            <View style={s.presetRow}>
+              {[15, 30, 60].map(d => (
+                <TouchableOpacity
+                  key={d}
+                  style={[s.presetChip, quickSetupDuration === d && s.presetChipActive]}
+                  onPress={() => setQuickSetupDuration(d)}
+                  accessibilityLabel={`${d} minutes`}
+                >
+                  <Text style={[s.presetText, quickSetupDuration === d && s.presetTextActive]}>
+                    {d} min
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={s.quickSetupBreakRow}>
+              <Text style={s.modalFieldLabel}>LUNCH BREAK</Text>
+              <Switch
+                value={quickSetupUseBreak}
+                onValueChange={setQuickSetupUseBreak}
+                trackColor={{ false: '#D8D0CB', true: `${colors.primary}55` }}
+                thumbColor={quickSetupUseBreak ? colors.primary : '#EAE1D7'}
+              />
+            </View>
+            {quickSetupUseBreak && (
+              <View style={s.presetRow}>
+                {['11:00 AM','12:00 PM','01:00 PM'].map(t => (
+                  <TouchableOpacity
+                    key={t}
+                    style={[s.presetChip, quickSetupBreakStart === t && s.presetChipActive]}
+                    onPress={() => setQuickSetupBreakStart(t)}
+                    accessibilityLabel={`Break start ${t}`}
+                  >
+                    <Text style={[s.presetText, quickSetupBreakStart === t && s.presetTextActive]}>
+                      {t.replace(':00', '')}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+                {['12:00 PM','01:00 PM','02:00 PM'].map(t => (
+                  <TouchableOpacity
+                    key={t}
+                    style={[s.presetChip, quickSetupBreakEnd === t && s.presetChipActive]}
+                    onPress={() => setQuickSetupBreakEnd(t)}
+                    accessibilityLabel={`Break end ${t}`}
+                  >
+                    <Text style={[s.presetText, quickSetupBreakEnd === t && s.presetTextActive]}>
+                      {t.replace(':00', '')}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            <View style={s.modalBtnsRow}>
+              <TouchableOpacity style={s.modalCancelBtn} onPress={() => setQuickSetupVisible(false)}>
+                <Text style={s.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.modalSaveBtn} onPress={handleQuickSetupApply}>
+                <Text style={s.modalSaveText}>Apply</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Add Slot modal ────────────────────────────────────────── */}
+      <Modal
+        visible={addSlotVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAddSlotVisible(false)}
+      >
+        <View style={s.modalOverlay}>
+          <View style={s.modalSheet}>
+            <View style={s.modalHandle} />
+            <Text style={s.modalTitle}>Add Slot</Text>
+            <Text style={s.modalSub}>Add a time slot for {getDayName(selectedDate)}</Text>
+
+            <Text style={s.modalFieldLabel}>SLOT TIME</Text>
+            <View style={s.presetRow}>
+              {['08:00 AM','09:00 AM','10:00 AM','11:00 AM','12:00 PM','01:00 PM','02:00 PM','03:00 PM','04:00 PM','05:00 PM']
+                .filter(t => {
+                  const m = timeToMinutes(t);
+                  const dayStart = timeToMinutes(selectedDayItem ? selectedDayItem.startTime : '09:00 AM');
+                  const dayEnd = timeToMinutes(selectedDayItem ? selectedDayItem.endTime : '05:00 PM');
+                  return m >= dayStart && m < dayEnd;
+                })
+                .map(t => (
+                <TouchableOpacity
+                  key={t}
+                  style={[s.presetChip, addSlotTime === t && s.presetChipActive]}
+                  onPress={() => {
+                    setAddSlotTime(t);
+                    setAddSlotError('');
+                  }}
+                  accessibilityLabel={t}
+                >
+                  <Text style={[s.presetText, addSlotTime === t && s.presetTextActive]}>
+                    {t.replace(':00', '')}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {addSlotError ? (
+              <Text style={s.addSlotErrorText}>{addSlotError}</Text>
+            ) : null}
+
+            <View style={s.modalBtnsRow}>
+              <TouchableOpacity style={s.modalCancelBtn} onPress={() => setAddSlotVisible(false)}>
+                <Text style={s.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.modalSaveBtn} onPress={handleAddSlotSave}>
+                <Text style={s.modalSaveText}>Add Slot</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -972,6 +1364,58 @@ const s = StyleSheet.create({
     shadowRadius: 8, elevation: 4,
   },
   modalSaveText: { fontSize: 14, fontWeight: '700', color: colors.white },
+
+  // ── Quick Setup modal ─────────────────────────────────────────
+  quickSetupDaysRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 14,
+  },
+  quickSetupDayChip: {
+    width: 44,
+    height: 36,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.creamBackground,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickSetupDayChipActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.softCoral,
+  },
+  quickSetupDayText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  quickSetupDayTextActive: {
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  quickSetupBreakRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+
+  // ── Add Slot modal ────────────────────────────────────────────
+  addSlotErrorText: {
+    fontSize: 12,
+    color: '#E74C3C',
+    fontWeight: '600',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  noSlotsText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    lineHeight: 18,
+    paddingVertical: 6,
+  },
 });
 
 export default AvailabilityScreen;
