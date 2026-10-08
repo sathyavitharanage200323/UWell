@@ -6,11 +6,11 @@ import {
   FlatList,
   TextInput,
   TouchableOpacity,
-  SafeAreaView,
   StatusBar,
   KeyboardAvoidingView,
   Platform
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, typography } from '../../theme';
 import ImagePlaceholder from '../../components/common/ImagePlaceholder';
 import { counselorService } from '../../services/counselorService';

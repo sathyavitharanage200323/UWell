@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { useAuth } from '../../context/AuthContext';
 
 const CORAL = '#EF806B';
 const CREAM = '#FFF9F3';
@@ -283,6 +284,8 @@ function WellnessIcon() {
 
 export default function HomeScreen() {
   const navigation = useNavigation<any>();
+  const { user } = useAuth();
+  const firstName = user?.firstName || 'Student';
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(14)).current;
   const logoScale = useRef(new Animated.Value(0.92)).current;
@@ -386,7 +389,7 @@ export default function HomeScreen() {
             </Text>
 
             <Text style={styles.welcomeText}>
-              Welcome back to UWell
+              Welcome back, {firstName}
             </Text>
 
             <Text style={styles.supportText}>

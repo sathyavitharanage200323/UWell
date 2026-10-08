@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import {
-  SafeAreaView, StatusBar, ScrollView, View, Text,
+  StatusBar, ScrollView, View, Text,
   TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '../../theme';
 import { authService } from '../../services/authService';

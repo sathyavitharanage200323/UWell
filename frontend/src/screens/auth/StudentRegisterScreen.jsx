@@ -1,8 +1,9 @@
 import React, { useState, useRef } from 'react';
 import {
-  SafeAreaView, StatusBar, ScrollView, View, Text,
+  StatusBar, ScrollView, View, Text,
   TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '../../theme';
 import { authService } from '../../services/authService';
@@ -13,8 +14,16 @@ import {
   sharedStyles, validators,
 } from './registerShared';
 
-const FACULTIES   = ['Science & Technology','Business','Arts & Humanities','Law','Medicine','Education','Engineering','Social Sciences'];
-const PROGRAMS    = ['Computer Science','Psychology','Business Administration','Law','Medicine','Education','Engineering','Social Work','Other'];
+const FACULTIES   = [
+  'Faculty of Computing',
+  'Faculty of Engineering',
+  'Faculty of Business',
+  'Faculty of Humanities and Sciences',
+  'School of Architecture',
+  'Faculty of Hospitality & Culinary',
+  'Others (postgraduate, MPhil, and PhD)',
+];
+const PROGRAMS    = ['Computer Science','Information Technology','Psychology','Business Administration','Law','Medicine','Education','Engineering','Social Work','Other'];
 const YEARS       = ['Year 1','Year 2','Year 3','Year 4','Year 5','Postgraduate','PhD'];
 
 const INIT = { firstName:'', lastName:'', studentId:'', faculty:'', program:'', year:'', email:'', phone:'', password:'', confirmPassword:'' };
@@ -29,6 +38,8 @@ export default function StudentRegisterScreen({ navigation }) {
   const [showPw, setShowPw]   = useState(false);
   const [showCPw, setShowCPw] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [registeredUser, setRegisteredUser] = useState(null);
+  const [registeredToken, setRegisteredToken] = useState(null);
 
   const set = (key, val) => {
     setF(p => ({ ...p, [key]: val }));
@@ -73,22 +84,69 @@ export default function StudentRegisterScreen({ navigation }) {
     try {
       setLoading(true);
       const payload = {
-        firstName: f.firstName.trim(), lastName: f.lastName.trim(),
-        studentId: f.studentId.trim(), faculty: f.faculty,
-        degreeProgram: f.program, yearOfStudy: f.year,
-        email: f.email.trim(), phone: f.phone.trim(),
-        password: f.password, role: 'student',
+        firstName: f.firstName.trim(),
+        lastName: f.lastName.trim(),
+        studentId: f.studentId.trim().toUpperCase(),
+        faculty: f.faculty,
+        degreeProgram: f.program,
+        yearOfStudy: f.year,
+        email: f.email.trim().toLowerCase(),
+        phone: f.phone ? f.phone.trim() : '',
+        password: f.password,
+        role: 'student',
       };
       const res = await authService.register(payload);
+      const studentData = res.user || {
+        firstName: payload.firstName,
+        lastName: payload.lastName,
+        studentId: payload.studentId,
+        faculty: payload.faculty,
+        degreeProgram: payload.degreeProgram,
+        yearOfStudy: payload.yearOfStudy,
+        email: payload.email,
+        role: 'student',
+      };
+      setRegisteredUser(studentData);
+      setRegisteredToken(res.token);
       setSuccess(true);
     } catch (e) {
-      setErrs(p => ({ ...p, general: e.message || 'Registration failed. Please try again.' }));
+      // Surface field-specific errors from the backend
+      const serverData = e.response?.data;
+      if (serverData?.field === 'studentId') {
+        setErrs(p => ({ ...p, studentId: serverData.message }));
+      } else if (serverData?.field === 'email') {
+        setErrs(p => ({ ...p, email: serverData.message }));
+      } else if (serverData?.errors?.length) {
+        setErrs(p => ({ ...p, general: serverData.errors.join(' • ') }));
+      } else {
+        const message = e.code === 'ECONNABORTED' || e.message === 'Network Error'
+          ? 'Unable to connect to the backend server. Please verify your phone and PC are on the same Wi-Fi network.'
+          : serverData?.message || e.message || 'Registration failed. Please try again.';
+        setErrs(p => ({ ...p, general: message }));
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  if (success) return <SafeAreaView style={sharedStyles.safe}><SuccessView role="student" onLogin={() => navigation.navigate('Login')} /></SafeAreaView>;
+  if (success) {
+    return (
+      <SafeAreaView style={sharedStyles.safe}>
+        <SuccessView
+          role="student"
+          userData={registeredUser}
+          onContinue={async () => {
+            if (registeredUser) {
+              await login({ ...registeredUser, token: registeredToken });
+            } else {
+              navigation.navigate('Login');
+            }
+          }}
+          onLogin={() => navigation.navigate('Login')}
+        />
+      </SafeAreaView>
+    );
+  }
 
   const isOk = (k) => touched[k] && !errs[k] && f[k]?.trim?.();
 
