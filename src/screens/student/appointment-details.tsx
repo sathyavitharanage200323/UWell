@@ -8,7 +8,7 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 
 export default function AppointmentDetailsScreen() {
   const navigation = useNavigation<any>();
@@ -30,9 +30,10 @@ export default function AppointmentDetailsScreen() {
               'Your appointment has been cancelled successfully.',
               [
                 {
-          text: 'OK',
-          onPress: () => navigation.getParent()?.getParent()?.navigate('Sessions'),
-        },
+                  text: 'OK',
+                  onPress: () =>
+                    navigation.getParent()?.getParent()?.navigate('Sessions'),
+                },
               ],
             );
           },
