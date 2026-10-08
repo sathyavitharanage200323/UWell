@@ -2,12 +2,20 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { colors, spacing, typography } from '../../theme';
 
-const NavigationHeader = ({ title, onMenuPress, rightComponent }) => {
+const NavigationHeader = ({ title, onMenuPress, onBack, rightComponent }) => {
   return (
     <View style={styles.container}>
-      <TouchableOpacity onPress={onMenuPress} style={styles.menuButton}>
-        <Text style={styles.menuIcon}>☰</Text>
-      </TouchableOpacity>
+      {onBack ? (
+        <TouchableOpacity onPress={onBack} style={styles.menuButton}>
+          <Text style={styles.menuIcon}>←</Text>
+        </TouchableOpacity>
+      ) : onMenuPress ? (
+        <TouchableOpacity onPress={onMenuPress} style={styles.menuButton}>
+          <Text style={styles.menuIcon}>☰</Text>
+        </TouchableOpacity>
+      ) : (
+        <View style={styles.menuButton} />
+      )}
       <Text style={styles.title}>{title}</Text>
       {rightComponent && <View style={styles.right}>{rightComponent}</View>}
     </View>

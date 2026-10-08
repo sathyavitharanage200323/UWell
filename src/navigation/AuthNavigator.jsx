@@ -6,6 +6,8 @@ import CounselorNavigator from './CounselorNavigator';
 import WelfareNavigator from './WelfareNavigator';
 import ManagementNavigator from './ManagementNavigator';
 import WelcomeScreen from '../screens/auth/WelcomeScreen';
+import SplashWelcomeScreen from '../screens/auth/SplashWelcomeScreen';
+import ConsentScreen from '../screens/auth/ConsentScreen';
 import LoginScreen from '../screens/auth/LoginScreen';
 // ── Legacy single-form register (kept as fallback, unused in main flow) ──
 import RegisterScreen from '../screens/auth/RegisterScreen';
@@ -56,8 +58,9 @@ const AuthNavigator = () => {
 
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      {/* Entry points */}
-      <Stack.Screen name="Welcome"  component={WelcomeScreen} />
+      {/* Entry points — Splash+Welcome → Consent → Login */}
+      <Stack.Screen name="Welcome"  component={SplashWelcomeScreen} />
+      <Stack.Screen name="Consent"  component={ConsentScreen} />
       <Stack.Screen name="Login"    component={LoginScreen} />
 
       {/* Register → role selector (replaces old single RegisterScreen) */}

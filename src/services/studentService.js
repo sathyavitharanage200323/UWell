@@ -1,6 +1,7 @@
 import api from './api';
 
 export const studentService = {
+
   getProfile: async () => {
     const response = await api.get('/student/profile');
     return response.data;
@@ -8,6 +9,14 @@ export const studentService = {
 
   updateProfile: async (profileData) => {
     const response = await api.put('/student/profile', profileData);
+    return response.data;
+  },
+
+  changePassword: async (currentPassword, newPassword) => {
+    const response = await api.put('/student/change-password', {
+      currentPassword,
+      newPassword,
+    });
     return response.data;
   },
 
@@ -21,8 +30,18 @@ export const studentService = {
     return response.data;
   },
 
+  submitWellbeingCheck: async (wellbeingData) => {
+    const response = await api.post('/student/wellbeing-check', wellbeingData);
+    return response.data;
+  },
+
   getCounselors: async () => {
     const response = await api.get('/student/counselors');
+    return response.data;
+  },
+
+  getCounselorById: async (counselorId) => {
+    const response = await api.get(`/student/counselors/${counselorId}`);
     return response.data;
   },
 
@@ -41,13 +60,33 @@ export const studentService = {
     return response.data;
   },
 
+  getAppointmentById: async (appointmentId) => {
+    const response = await api.get(`/student/appointments/${appointmentId}`);
+    return response.data;
+  },
+
   cancelAppointment: async (appointmentId) => {
     const response = await api.delete(`/student/appointments/${appointmentId}`);
+    return response.data;
+  },
+
+  rescheduleAppointment: async (appointmentId, newDateTime) => {
+    const response = await api.put(`/student/appointments/${appointmentId}/reschedule`, newDateTime);
     return response.data;
   },
 
   getResources: async () => {
     const response = await api.get('/student/resources');
     return response.data;
-  }
+  },
+
+  getResourceById: async (resourceId) => {
+    const response = await api.get(`/student/resources/${resourceId}`);
+    return response.data;
+  },
+
+  submitConsentForm: async (consentData) => {
+    const response = await api.post('/student/consent', consentData);
+    return response.data;
+  },
 };
