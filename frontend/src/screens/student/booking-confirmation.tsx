@@ -14,9 +14,9 @@ export default function BookingConfirmationScreen() {
   const route = useRoute();
   const params = route.params as {
     counselorId?: string; date?: string; time?: string;
-    sessionType?: string; notes?: string;
+    sessionType?: string; notes?: string; appointmentId?: string;
   } || {};
-  const { counselorId, date, time, sessionType, notes } = params;
+  const { counselorId, date, time, sessionType, notes, appointmentId } = params;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -154,7 +154,7 @@ export default function BookingConfirmationScreen() {
             styles.primaryButton,
             pressed && styles.buttonPressed,
           ]}
-          onPress={() => navigation.navigate('AppointmentDetails')}
+          onPress={() => navigation.navigate('AppointmentDetails', { appointmentId: route.params?.appointmentId || '' })}
         >
           <Text style={styles.primaryButtonText}>
             View Appointment
@@ -166,7 +166,7 @@ export default function BookingConfirmationScreen() {
         {/* My Appointments */}
         <Pressable
           style={styles.secondaryButton}
-          onPress={() => navigation.getParent()?.getParent()?.navigate('Sessions')}
+          onPress={() => navigation.getParent()?.navigate('Sessions')}
         >
           <Text style={styles.secondaryButtonText}>
             My Appointments
@@ -176,7 +176,7 @@ export default function BookingConfirmationScreen() {
         {/* Home */}
         <Pressable
           style={styles.homeLink}
-          onPress={() => navigation.getParent()?.getParent()?.navigate('Home')}
+          onPress={() => navigation.getParent()?.navigate('Home')}
         >
           <Text style={styles.homeLinkText}>
             Back to Home

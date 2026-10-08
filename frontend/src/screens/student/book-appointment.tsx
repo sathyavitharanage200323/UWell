@@ -14,9 +14,14 @@ export default function BookAppointmentScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute();
   const params = route.params as {
-    counselorId?: string; date?: string; time?: string;
+    counselorId?: string;
+    date?: string;
+    time?: string;
+    counselorName?: string;
+    appointmentId?: string;
   } || {};
-  const { counselorId, date, time } = params;
+  const { counselorId, date, time, counselorName, appointmentId } = params;
+  const isReschedule = !!appointmentId;
 
   const [sessionType, setSessionType] = useState('Online');
   const [notes, setNotes] = useState('');
@@ -24,10 +29,12 @@ export default function BookAppointmentScreen() {
   const handleReviewBooking = () => {
     navigation.navigate('ReviewBooking', {
       counselorId: String(counselorId || '1'),
+      counselorName: counselorName || 'Dr. Sarah Perera',
       date: String(date || 'Mon, Oct 12'),
       time: String(time || '09:00 AM'),
       sessionType,
       notes,
+      appointmentId,
     });
   };
 
@@ -53,13 +60,13 @@ export default function BookAppointmentScreen() {
         </Text>
 
         <Text style={styles.title}>
-          Book an Appointment
+          {isReschedule ? 'Reschedule Appointment' : 'Book an Appointment'}
         </Text>
 
         <Text style={styles.subtitle}>
-          Review your appointment details and
-          provide any information you would like
-          your counselor to know.
+          {isReschedule
+            ? 'Update session details for your existing appointment.'
+            : 'Review your appointment details and provide any information you would like your counselor to know.'}
         </Text>
 
         {/* Counselor */}

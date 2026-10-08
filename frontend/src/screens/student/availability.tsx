@@ -12,8 +12,13 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 export default function AvailabilityScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute();
-  const params = route.params as { counselorId?: number } || {};
-  const { counselorId } = params;
+  const params = route.params as {
+    counselorId?: number;
+    counselorName?: string;
+    appointmentId?: string;
+  } || {};
+  const { counselorId, counselorName, appointmentId } = params;
+  const isReschedule = !!appointmentId;
   const id = String(counselorId || '1');
 
   const [selectedDate, setSelectedDate] = useState('Mon, Oct 12');
@@ -47,22 +52,23 @@ export default function AvailabilityScreen() {
     },
   ];
 
-  const timeSlots = [
-    '09:00 AM',
-    '10:00 AM',
-    '11:30 AM',
-    '01:00 PM',
-    '02:30 PM',
-    '04:00 PM',
-  ];
+  const timeSlots: Record<string, string[]> = {
+    '1': ['09:00 AM', '10:00 AM', '11:30 AM', '02:00 PM', '03:30 PM'],
+    '2': ['08:30 AM', '10:30 AM', '01:00 PM', '02:30 PM', '04:00 PM'],
+    '3': ['09:00 AM', '11:00 AM', '12:30 PM', '03:00 PM', '05:00 PM'],
+  };
+
+  const slots = timeSlots[id] || timeSlots['1'];
 
   const handleContinue = () => {
     if (!selectedTime) return;
 
     navigation.navigate('BookAppointment', {
       counselorId: Number(id),
+      counselorName: counselorName || 'Dr. Sarah Perera',
       date: selectedDate,
       time: selectedTime,
+      appointmentId,
     });
   };
 
@@ -88,12 +94,13 @@ export default function AvailabilityScreen() {
         </Text>
 
         <Text style={styles.title}>
-          Choose a Date & Time
+          {isReschedule ? 'Pick a New Date & Time' : 'Choose a Date & Time'}
         </Text>
 
         <Text style={styles.subtitle}>
-          Select an available date and time for
-          your counseling session.
+          {isReschedule
+            ? 'Choose a new slot for your existing appointment.'
+            : 'Select an available date and time for your counseling session.'}
         </Text>
 
         {/* Selected Counselor */}
@@ -186,7 +193,7 @@ export default function AvailabilityScreen() {
         </Text>
 
         <View style={styles.timeGrid}>
-          {timeSlots.map((time) => {
+          {slots.map((time) => {
             const isSelected = selectedTime === time;
 
             return (

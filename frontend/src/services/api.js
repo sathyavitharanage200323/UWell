@@ -14,8 +14,8 @@ console.log('[UWell API] Base URL configured:', API_BASE_URL);
 
 api.interceptors.request.use(
   async (config) => {
-    console.log(`[UWell API Req] ${config.method?.toUpperCase()} ${config.baseURL || ''}${config.url}`);
     const token = await AsyncStorage.getItem('token');
+    console.log(`[UWell API Req] ${config.method?.toUpperCase()} ${config.url} | token: ${token ? token.substring(0, 15) + '...' : 'NONE'}`);
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
