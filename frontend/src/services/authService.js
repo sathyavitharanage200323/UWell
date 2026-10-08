@@ -2,9 +2,10 @@ import api from './api';
 import { mockUsers } from '../data/mockData';
 
 export const authService = {
-  login: async (email, password, role) => {
+  login: async (email, password, role = 'student') => {
     try {
-      const response = await api.post('/auth/login', { email, password, role });
+      const endpoint = role ? `/auth/${role}/login` : '/auth/login';
+      const response = await api.post(endpoint, { email, password, role });
       return response.data;
     } catch (error) {
       // Offline / Demo Fallback Mode
@@ -52,15 +53,11 @@ export const authService = {
   },
 
   register: async (userData) => {
-    try {
-      const response = await api.post('/auth/register', userData);
-      return response.data;
-    } catch (error) {
-      return {
-        user: { ...userData, id: Date.now() },
-        token: 'demo-jwt-token-12345'
-      };
-    }
+    // Route to the correct role endpoint
+    const role = userData.role || 'student';
+    const endpoint = `/auth/${role}/register`;
+    const response = await api.post(endpoint, userData);
+    return response.data;
   },
 
   logout: async () => {

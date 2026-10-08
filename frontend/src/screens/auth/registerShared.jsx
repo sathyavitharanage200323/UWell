@@ -217,7 +217,7 @@ export const DropdownField = ({
               style={[ddStyles.option, opt === value && ddStyles.optionActive]}
               onPress={() => { onSelect(opt); setOpen(false); }}
               accessibilityLabel={opt}
-              accessibilityRole="option"
+              accessibilityRole="button"
               accessibilityState={{ selected: opt === value }}
             >
               <Text style={[ddStyles.optionText, opt === value && ddStyles.optionTextActive]}>
@@ -413,42 +413,150 @@ const tcStyles = StyleSheet.create({
 });
 
 // ─── SuccessView ─────────────────────────────────────────────────────────
-export const SuccessView = ({ role, onLogin }) => (
+export const SuccessView = ({ role, onLogin, userData, onContinue }) => (
   <View style={svStyles.wrap}>
     <View style={svStyles.circle}>
       <Feather name="check" size={40} color={colors.white} />
     </View>
     <Text style={svStyles.title}>Account Created!</Text>
     <Text style={svStyles.sub}>
-      Your {role} account has been created successfully.{'\n'}You can now sign in.
+      Your {role} account has been registered and saved to the database.
     </Text>
-    <TouchableOpacity style={svStyles.btn} onPress={onLogin} accessibilityRole="button">
-      <Text style={svStyles.btnText}>Go to Login</Text>
+
+    {userData && (
+      <View style={svStyles.dataCard}>
+        <Text style={svStyles.dataCardTitle}>Registered Student Details</Text>
+        <View style={svStyles.dataRow}>
+          <Text style={svStyles.dataLabel}>Full Name:</Text>
+          <Text style={svStyles.dataValue}>{userData.fullName || `${userData.firstName} ${userData.lastName}`}</Text>
+        </View>
+        <View style={svStyles.dataRow}>
+          <Text style={svStyles.dataLabel}>Student ID:</Text>
+          <Text style={svStyles.dataValueHighlight}>{userData.studentId}</Text>
+        </View>
+        {userData.faculty ? (
+          <View style={svStyles.dataRow}>
+            <Text style={svStyles.dataLabel}>Faculty:</Text>
+            <Text style={svStyles.dataValue}>{userData.faculty}</Text>
+          </View>
+        ) : null}
+        {userData.degreeProgram ? (
+          <View style={svStyles.dataRow}>
+            <Text style={svStyles.dataLabel}>Degree:</Text>
+            <Text style={svStyles.dataValue}>{userData.degreeProgram}</Text>
+          </View>
+        ) : null}
+        {userData.yearOfStudy ? (
+          <View style={svStyles.dataRow}>
+            <Text style={svStyles.dataLabel}>Year:</Text>
+            <Text style={svStyles.dataValue}>{userData.yearOfStudy}</Text>
+          </View>
+        ) : null}
+        <View style={svStyles.dataRow}>
+          <Text style={svStyles.dataLabel}>Email:</Text>
+          <Text style={svStyles.dataValue}>{userData.email}</Text>
+        </View>
+      </View>
+    )}
+
+    {onContinue && (
+      <TouchableOpacity style={svStyles.btn} onPress={onContinue} accessibilityRole="button">
+        <Text style={svStyles.btnText}>Go to Dashboard</Text>
+      </TouchableOpacity>
+    )}
+
+    <TouchableOpacity
+      style={[svStyles.btnSecondary, !onContinue && svStyles.btn]}
+      onPress={onLogin}
+      accessibilityRole="button"
+    >
+      <Text style={[svStyles.btnSecondaryText, !onContinue && svStyles.btnText]}>
+        {onContinue ? 'Go to Login Instead' : 'Go to Login'}
+      </Text>
     </TouchableOpacity>
   </View>
 );
 
 const svStyles = StyleSheet.create({
-  wrap:   { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
+  wrap:   { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   circle: {
-    width: 88, height: 88, borderRadius: 44,
+    width: 76, height: 76, borderRadius: 38,
     backgroundColor: colors.statusGreenText,
     alignItems: 'center', justifyContent: 'center',
-    marginBottom: 24,
+    marginBottom: 16,
     shadowColor: colors.statusGreenText,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.3, shadowRadius: 12, elevation: 6,
   },
-  title: { fontSize: 24, fontWeight: '700', color: colors.darkText, marginBottom: 12, textAlign: 'center' },
-  sub:   { fontSize: 14, color: colors.textSecondary, textAlign: 'center', lineHeight: 22, marginBottom: 32 },
+  title: { fontSize: 22, fontWeight: '700', color: colors.darkText, marginBottom: 8, textAlign: 'center' },
+  sub:   { fontSize: 13, color: colors.textSecondary, textAlign: 'center', lineHeight: 20, marginBottom: 20 },
+  dataCard: {
+    width: '100%',
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    shadowColor: '#3D2C2E',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  dataCardTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.primary,
+    marginBottom: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  dataRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 5,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#F0ECE9',
+  },
+  dataLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
+  dataValue: {
+    fontSize: 12,
+    color: colors.darkText,
+    fontWeight: '600',
+    maxWidth: '65%',
+    textAlign: 'right',
+  },
+  dataValueHighlight: {
+    fontSize: 12,
+    color: colors.primary,
+    fontWeight: '700',
+  },
   btn: {
     backgroundColor: colors.primary, borderRadius: 16,
-    paddingVertical: 14, paddingHorizontal: 40,
+    paddingVertical: 14, paddingHorizontal: 36,
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3,
     shadowRadius: 8, elevation: 4,
+    width: '100%',
+    alignItems: 'center',
   },
   btnText: { color: colors.white, fontSize: 15, fontWeight: '700' },
+  btnSecondary: {
+    marginTop: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+  },
+  btnSecondaryText: {
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
 });
 
 // ─── General error banner ─────────────────────────────────────────────────

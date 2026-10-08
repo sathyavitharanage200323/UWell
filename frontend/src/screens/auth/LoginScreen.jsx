@@ -6,13 +6,13 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  SafeAreaView,
   StatusBar,
   Animated,
   Dimensions,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '../../theme';
 import { validateEmail, validatePassword } from '../../utils/validation';
@@ -156,9 +156,9 @@ const LoginScreen = ({ navigation }) => {
       setLoading(true);
       setErrors({});
       const response = await authService.login(email, password, role);
-      await login(response.user);
+      await login({ ...response.user, token: response.token });
     } catch (error) {
-      setErrors({ general: error.message || 'Login failed. Please try again.' });
+      setErrors({ general: error.response?.data?.message || error.message || 'Login failed. Please try again.' });
     } finally {
       setLoading(false);
     }

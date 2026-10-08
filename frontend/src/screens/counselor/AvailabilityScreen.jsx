@@ -26,13 +26,13 @@ import {
   ScrollView,
   TouchableOpacity,
   Switch,
-  SafeAreaView,
   StatusBar,
   Modal,
   Alert,
   Animated,
   Dimensions,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '../../theme';
 import { counselorService } from '../../services/counselorService';

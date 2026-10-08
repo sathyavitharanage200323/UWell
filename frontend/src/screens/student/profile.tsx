@@ -8,9 +8,20 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { useAuth } from '../../context/AuthContext';
 
 export default function ProfileScreen() {
   const navigation = useNavigation<any>();
+  const { user } = useAuth();
+
+  const fullName = user?.fullName || (user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : 'Wasana');
+  const studentId = user?.studentId || 'STU20240001';
+  const email = user?.email || 'student@example.com';
+  const faculty = user?.faculty || 'Faculty of Computing';
+  const degree = user?.degreeProgram || 'Computer Science';
+  const year = user?.yearOfStudy || 'Year 1';
+  const phone = user?.phone || 'Not provided';
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
@@ -37,21 +48,34 @@ export default function ProfileScreen() {
             <Text style={styles.avatarText}>👤</Text>
           </View>
 
-          <Text style={styles.name}>Wasana</Text>
+          <Text style={styles.name}>{fullName}</Text>
 
-          <Text style={styles.role}>University Student</Text>
+          <Text style={styles.role}>University Student • {studentId}</Text>
 
           <Text style={styles.email}>
-            student@example.com
+            {email}
           </Text>
         </View>
 
-        {/* Personal Information */}
+        {/* Personal & Academic Information */}
         <Text style={styles.sectionTitle}>
-          Personal Information
+          Academic & Personal Information
         </Text>
 
         <View style={styles.card}>
+          <View style={styles.infoRow}>
+            <View style={styles.iconBox}>
+              <Text>🪪</Text>
+            </View>
+
+            <View style={styles.infoContent}>
+              <Text style={styles.label}>Student ID</Text>
+              <Text style={[styles.value, { color: '#EF806B', fontWeight: '700' }]}>{studentId}</Text>
+            </View>
+          </View>
+
+          <View style={styles.divider} />
+
           <View style={styles.infoRow}>
             <View style={styles.iconBox}>
               <Text>👤</Text>
@@ -59,7 +83,46 @@ export default function ProfileScreen() {
 
             <View style={styles.infoContent}>
               <Text style={styles.label}>Full Name</Text>
-              <Text style={styles.value}>Wasana</Text>
+              <Text style={styles.value}>{fullName}</Text>
+            </View>
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.infoRow}>
+            <View style={styles.iconBox}>
+              <Text>🏛️</Text>
+            </View>
+
+            <View style={styles.infoContent}>
+              <Text style={styles.label}>Faculty</Text>
+              <Text style={styles.value}>{faculty}</Text>
+            </View>
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.infoRow}>
+            <View style={styles.iconBox}>
+              <Text>📚</Text>
+            </View>
+
+            <View style={styles.infoContent}>
+              <Text style={styles.label}>Degree Program</Text>
+              <Text style={styles.value}>{degree}</Text>
+            </View>
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.infoRow}>
+            <View style={styles.iconBox}>
+              <Text>🎓</Text>
+            </View>
+
+            <View style={styles.infoContent}>
+              <Text style={styles.label}>Year of Study</Text>
+              <Text style={styles.value}>{year}</Text>
             </View>
           </View>
 
@@ -72,9 +135,7 @@ export default function ProfileScreen() {
 
             <View style={styles.infoContent}>
               <Text style={styles.label}>Email</Text>
-              <Text style={styles.value}>
-                student@example.com
-              </Text>
+              <Text style={styles.value}>{email}</Text>
             </View>
           </View>
 
@@ -82,14 +143,12 @@ export default function ProfileScreen() {
 
           <View style={styles.infoRow}>
             <View style={styles.iconBox}>
-              <Text>🎓</Text>
+              <Text>📞</Text>
             </View>
 
             <View style={styles.infoContent}>
-              <Text style={styles.label}>Role</Text>
-              <Text style={styles.value}>
-                University Student
-              </Text>
+              <Text style={styles.label}>Phone Number</Text>
+              <Text style={styles.value}>{phone}</Text>
             </View>
           </View>
         </View>
