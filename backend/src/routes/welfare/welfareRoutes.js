@@ -10,6 +10,12 @@ const {
   getAllWelfareOfficers,
   getCounselingServices,
   updateCounselorStatus,
+  getWelfareAppointments,
+  getWelfareAppointmentById,
+  updateWelfareAppointment,
+  deleteWelfareAppointment,
+  getMyNotifications,
+  markNotificationRead,
 } = require('../../controllers/welfare/welfareController');
 
 // All routes below require valid JWT
@@ -56,7 +62,27 @@ router.get('/all', authorise('welfare', 'management'), getAllWelfareOfficers);
 router.get('/staff/:staffId', authorise('welfare', 'management'), getByStaffId);
 
 /**
- * GET  /api/welfare/:staffId – direct alias by staffId
+ * APPOINTMENTS
+ * GET    /api/welfare/appointments         – all appointments (welfare dashboard)
+ * GET    /api/welfare/appointments/:id     – single appointment with full details
+ * PUT    /api/welfare/appointments/:id     – update (reschedule, status, notes)
+ * DELETE /api/welfare/appointments/:id     – hard delete + notify student & counselor
+ */
+router.get('/appointments', authorise('welfare', 'management'), getWelfareAppointments);
+router.get('/appointments/:id', authorise('welfare', 'management'), getWelfareAppointmentById);
+router.put('/appointments/:id', authorise('welfare', 'management'), updateWelfareAppointment);
+router.delete('/appointments/:id', authorise('welfare', 'management'), deleteWelfareAppointment);
+
+/**
+ * NOTIFICATIONS
+ * GET  /api/welfare/notifications       – current user's notifications
+ * PUT  /api/welfare/notifications/:id   – mark one as read
+ */
+router.get('/notifications', getMyNotifications);
+router.put('/notifications/:id/read', markNotificationRead);
+
+/**
+ * GET  /api/welfare/:staffId – direct alias by staffId (must be LAST to avoid conflicts)
  */
 router.get('/:staffId', authorise('welfare', 'management'), getByStaffId);
 

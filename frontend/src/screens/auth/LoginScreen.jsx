@@ -148,14 +148,21 @@ const LoginScreen = ({ navigation }) => {
 
   const handleLogin = async () => {
     const newErrors = {};
-    if (!validateEmail(email))    newErrors.email    = 'Please enter a valid email';
+    const trimmedInput = (email || '').trim();
+    if (role === USER_ROLES.MANAGEMENT || role === USER_ROLES.WELFARE) {
+      if (!trimmedInput) {
+        newErrors.email = 'Please enter your work email or ID';
+      }
+    } else {
+      if (!validateEmail(trimmedInput)) newErrors.email = 'Please enter a valid email';
+    }
     if (!validatePassword(password)) newErrors.password = 'Password must be at least 6 characters';
     if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
 
     try {
       setLoading(true);
       setErrors({});
-      const response = await authService.login(email, password, role);
+      const response = await authService.login(trimmedInput, password, role);
       await login({ ...response.user, token: response.token });
     } catch (error) {
       const isPending = error.response?.data?.isPendingApproval;
@@ -252,14 +259,22 @@ const LoginScreen = ({ navigation }) => {
 
           {/* ── Email field ───────────────────────────────────── */}
           <Animated.View style={{ opacity: fadeAnim }}>
-            <Text style={styles.fieldLabel}>Email</Text>
+            <Text style={styles.fieldLabel}>
+              {role === USER_ROLES.MANAGEMENT ? 'Email or Employee ID' : role === USER_ROLES.WELFARE ? 'Email or Staff ID' : 'Email'}
+            </Text>
             <View style={[styles.inputBox, errors.email && styles.inputBoxError]}>
               <Feather name="mail" size={18} color={errors.email ? colors.error : colors.textSecondary} style={styles.inputIcon} />
               <TextInput
                 style={styles.inputText}
                 value={email}
                 onChangeText={t => { setEmail(t); setErrors(e => ({ ...e, email: undefined })); }}
-                placeholder="Enter your email"
+                placeholder={
+                  role === USER_ROLES.MANAGEMENT
+                    ? 'e.g. hi@gmail.com or EMP1010'
+                    : role === USER_ROLES.WELFARE
+                    ? 'e.g. welfare@gmail.com or STF01'
+                    : 'Enter your email'
+                }
                 placeholderTextColor={colors.textMuted}
                 keyboardType="email-address"
                 autoCapitalize="none"

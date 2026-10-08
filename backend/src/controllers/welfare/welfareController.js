@@ -1,6 +1,7 @@
 const Welfare = require('../../models/welfare/Welfare');
 const Counselor = require('../../models/counselor/Counselor');
 const Appointment = require('../../models/counselor/Appointment');
+const Notification = require('../../models/Notification');
 
 // ── Get Logged-In Welfare Officer Profile ─────────────────────────────────────
 exports.getProfile = async (req, res) => {
@@ -344,5 +345,267 @@ exports.updateCounselorStatus = async (req, res) => {
   } catch (error) {
     console.error('❌ updateCounselorStatus error:', error);
     res.status(500).json({ success: false, message: 'Server error updating counselor status' });
+  }
+};
+
+// ── Helper: Dispatch Notification ────────────────────────────────────────────
+const sendNotification = async (recipientId, recipientType, title, message, type, appointmentId = null) => {
+  try {
+    await Notification.create({ recipientId, recipientType, title, message, type, appointmentId });
+  } catch (err) {
+    console.error('❌ sendNotification error:', err.message);
+  }
+};
+
+// ── Get All Appointments (for Welfare Officer Dashboard) ─────────────────────
+exports.getWelfareAppointments = async (req, res) => {
+  try {
+    const appointments = await Appointment.find()
+      .populate('student', 'firstName lastName studentId email faculty degreeProgram yearOfStudy phone')
+      .populate('counselor', 'firstName lastName staffId email specialization officeLocation phone')
+      .sort({ createdAt: -1 });
+
+    const mapped = appointments.map((a) => {
+      const studentName =
+        a.studentName ||
+        (a.student ? `${a.student.firstName || ''} ${a.student.lastName || ''}`.trim() : 'Unknown Student');
+      const counselorName = a.counselorName || (a.counselor ? `${a.counselor.firstName || ''} ${a.counselor.lastName || ''}`.trim() : 'Unknown Counselor');
+
+      return {
+        _id: a._id.toString(),
+        id: a._id.toString(),
+        studentId: a.student?._id?.toString() || null,
+        studentName,
+        studentRegNo: a.student?.studentId || '',
+        studentEmail: a.student?.email || '',
+        studentFaculty: a.student?.faculty || '',
+        studentDegree: a.student?.degreeProgram || '',
+        studentYear: a.student?.yearOfStudy || '',
+        studentPhone: a.student?.phone || '',
+        counselorId: a.counselor?._id?.toString() || null,
+        counselorName,
+        counselorEmail: a.counselor?.email || '',
+        counselorPhone: a.counselor?.phone || '',
+        counselorSpecialization: a.counselorSpecialization || a.counselor?.specialization || 'Student Counselling',
+        counselorOffice: a.counselor?.officeLocation || '',
+        date: a.date,
+        time: a.time,
+        sessionType: a.sessionType,
+        status: a.status,
+        notes: a.notes || '',
+        createdAt: a.createdAt,
+        updatedAt: a.updatedAt,
+      };
+    });
+
+    res.status(200).json({ success: true, count: mapped.length, appointments: mapped });
+  } catch (error) {
+    console.error('❌ getWelfareAppointments error:', error);
+    res.status(500).json({ success: false, message: 'Server error fetching appointments' });
+  }
+};
+
+// ── Get Single Appointment ────────────────────────────────────────────────────
+exports.getWelfareAppointmentById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const a = await Appointment.findById(id)
+      .populate('student', 'firstName lastName studentId email faculty degreeProgram yearOfStudy phone')
+      .populate('counselor', 'firstName lastName staffId email specialization officeLocation phone');
+
+    if (!a) return res.status(404).json({ success: false, message: 'Appointment not found' });
+
+    const studentName = a.studentName || (a.student ? `${a.student.firstName} ${a.student.lastName}`.trim() : 'Unknown');
+    const counselorName = a.counselorName || (a.counselor ? `${a.counselor.firstName} ${a.counselor.lastName}`.trim() : 'Unknown');
+
+    res.status(200).json({
+      success: true,
+      appointment: {
+        _id: a._id.toString(),
+        id: a._id.toString(),
+        studentId: a.student?._id?.toString() || null,
+        studentName,
+        studentRegNo: a.student?.studentId || '',
+        studentEmail: a.student?.email || '',
+        studentFaculty: a.student?.faculty || '',
+        studentDegree: a.student?.degreeProgram || '',
+        studentYear: a.student?.yearOfStudy || '',
+        studentPhone: a.student?.phone || '',
+        counselorId: a.counselor?._id?.toString() || null,
+        counselorName,
+        counselorEmail: a.counselor?.email || '',
+        counselorPhone: a.counselor?.phone || '',
+        counselorSpecialization: a.counselorSpecialization || a.counselor?.specialization || '',
+        counselorOffice: a.counselor?.officeLocation || '',
+        date: a.date,
+        time: a.time,
+        sessionType: a.sessionType,
+        status: a.status,
+        notes: a.notes || '',
+        createdAt: a.createdAt,
+        updatedAt: a.updatedAt,
+      },
+    });
+  } catch (error) {
+    console.error('❌ getWelfareAppointmentById error:', error);
+    res.status(500).json({ success: false, message: 'Server error fetching appointment' });
+  }
+};
+
+// ── Update Appointment (reschedule, status change, notes) ─────────────────────
+exports.updateWelfareAppointment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { date, time, sessionType, status, notes, officerNotes } = req.body;
+
+    const appointment = await Appointment.findById(id)
+      .populate('student', 'firstName lastName studentId email')
+      .populate('counselor', 'firstName lastName email');
+
+    if (!appointment) {
+      return res.status(404).json({ success: false, message: 'Appointment not found' });
+    }
+
+    const prevDate = appointment.date;
+    const prevTime = appointment.time;
+    const prevStatus = appointment.status;
+
+    if (date !== undefined) appointment.date = date.trim();
+    if (time !== undefined) appointment.time = time.trim();
+    if (sessionType !== undefined) appointment.sessionType = sessionType;
+    if (status !== undefined) appointment.status = status;
+    if (notes !== undefined) appointment.notes = notes;
+    if (officerNotes !== undefined) appointment.notes = (appointment.notes ? appointment.notes + '\n[Officer] ' : '[Officer] ') + officerNotes;
+
+    await appointment.save();
+
+    // ── Send notifications to Student & Counselor ──────────────────────────
+    const isRescheduled = (date && date !== prevDate) || (time && time !== prevTime);
+    const isStatusChanged = status && status !== prevStatus;
+    const studentName = appointment.studentName || (appointment.student ? `${appointment.student.firstName} ${appointment.student.lastName}` : 'Student');
+    const counselorName = appointment.counselorName || (appointment.counselor ? `${appointment.counselor.firstName} ${appointment.counselor.lastName}` : 'Counselor');
+
+    let notifTitle = 'Appointment Updated';
+    let notifType = 'appointment_updated';
+    let studentMsg = `Your appointment with ${counselorName} has been updated.`;
+    let counselorMsg = `Your appointment with ${studentName} has been updated.`;
+
+    if (isRescheduled) {
+      notifTitle = 'Appointment Rescheduled';
+      notifType = 'appointment_rescheduled';
+      const newDateStr = `${appointment.date} at ${appointment.time}`;
+      studentMsg = `Your appointment with ${counselorName} has been rescheduled to ${newDateStr}.`;
+      counselorMsg = `Your appointment with ${studentName} has been rescheduled to ${newDateStr}.`;
+    } else if (isStatusChanged) {
+      if (status === 'cancelled' || status === 'Cancelled') {
+        notifTitle = 'Appointment Cancelled';
+        notifType = 'appointment_cancelled';
+        studentMsg = `Your appointment with ${counselorName} has been cancelled by the welfare officer.`;
+        counselorMsg = `Your session with ${studentName} has been cancelled by the welfare officer.`;
+      } else {
+        studentMsg = `Your appointment status has been updated to: ${status}.`;
+        counselorMsg = `The session status with ${studentName} has been updated to: ${status}.`;
+      }
+    }
+
+    if (appointment.student?._id) {
+      await sendNotification(appointment.student._id, 'student', notifTitle, studentMsg, notifType, appointment._id);
+    }
+    if (appointment.counselor?._id) {
+      await sendNotification(appointment.counselor._id, 'counselor', notifTitle, counselorMsg, notifType, appointment._id);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Appointment updated and notifications dispatched',
+      appointment: {
+        _id: appointment._id.toString(),
+        id: appointment._id.toString(),
+        studentName,
+        counselorName,
+        date: appointment.date,
+        time: appointment.time,
+        sessionType: appointment.sessionType,
+        status: appointment.status,
+        notes: appointment.notes,
+      },
+    });
+  } catch (error) {
+    console.error('❌ updateWelfareAppointment error:', error);
+    res.status(500).json({ success: false, message: error.message || 'Server error updating appointment' });
+  }
+};
+
+// ── Delete (Hard Remove) Appointment ─────────────────────────────────────────
+exports.deleteWelfareAppointment = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const appointment = await Appointment.findById(id)
+      .populate('student', 'firstName lastName studentId email')
+      .populate('counselor', 'firstName lastName email');
+
+    if (!appointment) {
+      return res.status(404).json({ success: false, message: 'Appointment not found' });
+    }
+
+    const studentName = appointment.studentName || (appointment.student ? `${appointment.student.firstName} ${appointment.student.lastName}` : 'Student');
+    const counselorName = appointment.counselorName || (appointment.counselor ? `${appointment.counselor.firstName} ${appointment.counselor.lastName}` : 'Counselor');
+
+    // Notify before deleting
+    if (appointment.student?._id) {
+      await sendNotification(
+        appointment.student._id,
+        'student',
+        'Appointment Removed',
+        `Your appointment with ${counselorName} scheduled on ${appointment.date} at ${appointment.time} has been removed by the welfare officer.`,
+        'appointment_deleted',
+        appointment._id
+      );
+    }
+    if (appointment.counselor?._id) {
+      await sendNotification(
+        appointment.counselor._id,
+        'counselor',
+        'Appointment Removed',
+        `The session with ${studentName} scheduled on ${appointment.date} at ${appointment.time} has been removed by the welfare officer.`,
+        'appointment_deleted',
+        appointment._id
+      );
+    }
+
+    await Appointment.findByIdAndDelete(id);
+
+    res.status(200).json({ success: true, message: 'Appointment deleted and parties notified' });
+  } catch (error) {
+    console.error('❌ deleteWelfareAppointment error:', error);
+    res.status(500).json({ success: false, message: error.message || 'Server error deleting appointment' });
+  }
+};
+
+// ── Get Notifications for Current User ────────────────────────────────────────
+exports.getMyNotifications = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const notifications = await Notification.find({ recipientId: userId })
+      .sort({ createdAt: -1 })
+      .limit(50);
+
+    res.status(200).json({ success: true, count: notifications.length, notifications });
+  } catch (error) {
+    console.error('❌ getMyNotifications error:', error);
+    res.status(500).json({ success: false, message: 'Server error fetching notifications' });
+  }
+};
+
+// ── Mark Notification as Read ─────────────────────────────────────────────────
+exports.markNotificationRead = async (req, res) => {
+  try {
+    const { id } = req.params;
+    await Notification.findByIdAndUpdate(id, { isRead: true });
+    res.status(200).json({ success: true, message: 'Notification marked as read' });
+  } catch (error) {
+    console.error('❌ markNotificationRead error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 };

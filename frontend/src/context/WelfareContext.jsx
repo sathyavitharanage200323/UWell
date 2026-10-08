@@ -89,16 +89,29 @@ export const WelfareProvider = ({ children }) => {
 
   const loadAllData = async () => {
     try {
-      const [aptData, notifData, profileData, privacyData] = await Promise.all([
-        AsyncStorage.getItem(STORAGE_KEYS.APPOINTMENTS),
+      const [notifData, profileData, privacyData] = await Promise.all([
         AsyncStorage.getItem(STORAGE_KEYS.NOTIFICATIONS),
         AsyncStorage.getItem(STORAGE_KEYS.PROFILE),
         AsyncStorage.getItem(STORAGE_KEYS.PRIVACY)
       ]);
 
-      const apt = aptData ? JSON.parse(aptData) : initialAppointments;
+      // Appointments: always try backend first
+      let apt = initialAppointments;
+      try {
+        const aptRes = await welfareService.getAppointments();
+        if (aptRes?.appointments?.length > 0) {
+          apt = aptRes.appointments;
+          await AsyncStorage.setItem(STORAGE_KEYS.APPOINTMENTS, JSON.stringify(apt));
+        } else {
+          const cached = await AsyncStorage.getItem(STORAGE_KEYS.APPOINTMENTS);
+          apt = cached ? JSON.parse(cached) : initialAppointments;
+        }
+      } catch {
+        const cached = await AsyncStorage.getItem(STORAGE_KEYS.APPOINTMENTS);
+        apt = cached ? JSON.parse(cached) : initialAppointments;
+      }
+
       const notif = notifData ? JSON.parse(notifData) : initialNotifications;
-      // Profile: prefer real auth user over stored/mock data
       let prof;
       if (authUser && (authUser.role === 'welfare' || authUser.staffId)) {
         prof = buildProfileFromAuth(authUser);
@@ -112,7 +125,6 @@ export const WelfareProvider = ({ children }) => {
       setProfile(prof);
       setPrivacy(priv);
 
-      if (!aptData) await AsyncStorage.setItem(STORAGE_KEYS.APPOINTMENTS, JSON.stringify(initialAppointments));
       if (!notifData) await AsyncStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(initialNotifications));
       if (!profileData) await AsyncStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(initialOfficer));
       if (!privacyData) await AsyncStorage.setItem(STORAGE_KEYS.PRIVACY, JSON.stringify(initialPrivacy));
@@ -123,33 +135,55 @@ export const WelfareProvider = ({ children }) => {
     }
   };
 
+  // Refresh appointments from backend (can be called manually)
+  const refreshAppointments = async () => {
+    try {
+      const aptRes = await welfareService.getAppointments();
+      if (aptRes?.appointments) {
+        setAppointments(aptRes.appointments);
+        await AsyncStorage.setItem(STORAGE_KEYS.APPOINTMENTS, JSON.stringify(aptRes.appointments));
+      }
+    } catch (error) {
+      console.error('refreshAppointments error:', error);
+    }
+  };
+
   // ----- APPOINTMENTS: READ -----
   const getAppointments = (filter = 'All') => {
     if (filter === 'All') return appointments;
-    return appointments.filter((a) => a.status === filter);
+    // Normalise status comparison (backend uses lowercase 'upcoming', 'cancelled', etc.)
+    return appointments.filter((a) => {
+      const s = (a.status || '').toLowerCase();
+      const f = filter.toLowerCase();
+      return s === f;
+    });
   };
 
-  const getAppointmentById = (id) => appointments.find((a) => a.id === id);
+  const getAppointmentById = (id) => appointments.find((a) => a.id === id || a._id === id);
 
-  // ----- APPOINTMENTS: UPDATE -----
+  // ----- APPOINTMENTS: UPDATE (backend + local) -----
   const updateAppointment = async (id, changes) => {
-    const updated = appointments.map((a) => (a.id === id ? { ...a, ...changes } : a));
+    // Optimistic local update
+    const updated = appointments.map((a) => (a.id === id || a._id === id ? { ...a, ...changes } : a));
     setAppointments(updated);
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.APPOINTMENTS, JSON.stringify(updated));
+      // Sync to backend
+      await welfareService.updateAppointment(id, changes);
     } catch (error) {
       console.error('updateAppointment error:', error);
     }
   };
 
-  // ----- APPOINTMENTS: DELETE (soft — status becomes Cancelled) -----
+  // ----- APPOINTMENTS: DELETE (soft — status becomes cancelled) -----
   const cancelAppointment = async (id) => {
     const updated = appointments.map((a) =>
-      a.id === id ? { ...a, status: 'Cancelled' } : a
+      a.id === id || a._id === id ? { ...a, status: 'cancelled' } : a
     );
     setAppointments(updated);
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.APPOINTMENTS, JSON.stringify(updated));
+      await welfareService.updateAppointment(id, { status: 'cancelled' });
     } catch (error) {
       console.error('cancelAppointment error:', error);
     }
@@ -157,14 +191,16 @@ export const WelfareProvider = ({ children }) => {
 
   // ----- APPOINTMENTS: DELETE (hard remove) -----
   const deleteAppointment = async (id) => {
-    const updated = appointments.filter((a) => a.id !== id);
+    const updated = appointments.filter((a) => a.id !== id && a._id !== id);
     setAppointments(updated);
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.APPOINTMENTS, JSON.stringify(updated));
+      await welfareService.deleteAppointment(id);
     } catch (error) {
       console.error('deleteAppointment error:', error);
     }
   };
+
 
   // ----- NOTIFICATIONS: UPDATE -----
   const markNotificationRead = async (id) => {
@@ -268,6 +304,7 @@ export const WelfareProvider = ({ children }) => {
     // Getters (READ)
     getAppointments,
     getAppointmentById,
+    refreshAppointments,
 
     // Appointments (UPDATE / DELETE)
     updateAppointment,
