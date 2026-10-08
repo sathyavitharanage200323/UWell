@@ -104,7 +104,8 @@ export const counselorService = {
       studentsData = studentsData.map((s) =>
         s.id === studentId ? { ...s, sessionNotesHistory: notes } : s
       );
-      return { success: true, notes };
+      const updated = studentsData.find((s) => s.id === studentId) || { success: true, notes };
+      return updated;
     }
   },
 

@@ -19,7 +19,6 @@ import {
 } from 'react-native';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '../../theme';
-import Button from '../../components/common/Button';
 
 const { width } = Dimensions.get('window');
 
