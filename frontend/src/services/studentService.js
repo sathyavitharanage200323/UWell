@@ -20,13 +20,40 @@ export const studentService = {
     return response.data;
   },
 
+  // ── Mood CRUD ─────────────────────────────────────────────────────────────
+  createMood: async (mood, notes = '') => {
+    const response = await api.post('/student/mood', { mood, notes });
+    return response.data;
+  },
+
+  getMoods: async () => {
+    const response = await api.get('/student/mood');
+    return response.data;
+  },
+
+  getMoodById: async (id) => {
+    const response = await api.get(`/student/mood/${id}`);
+    return response.data;
+  },
+
+  updateMood: async (id, mood, notes) => {
+    const response = await api.put(`/student/mood/${id}`, { mood, notes });
+    return response.data;
+  },
+
+  deleteMood: async (id) => {
+    const response = await api.delete(`/student/mood/${id}`);
+    return response.data;
+  },
+
+  // ── Legacy aliases (keep for compatibility) ───────────────────────────────
   submitMoodCheck: async (moodData) => {
-    const response = await api.post('/student/mood-check', moodData);
+    const response = await api.post('/student/mood', moodData);
     return response.data;
   },
 
   getMoodHistory: async () => {
-    const response = await api.get('/student/mood-history');
+    const response = await api.get('/student/mood');
     return response.data;
   },
 

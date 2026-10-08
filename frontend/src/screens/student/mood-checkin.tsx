@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { studentService } from '../../services/studentService';
 
 const CORAL = '#EF806B';
 const CREAM = '#FFF9F3';
@@ -404,12 +405,20 @@ export default function MoodCheckInScreen() {
     ]).start();
   }, []);
 
-  const handleContinue = () => {
-    if (selectedMood) {
-      navigation.navigate('MoodResult', {
-        mood: selectedMood,
-      });
+  const handleContinue = async () => {
+    if (!selectedMood) return;
+
+    // Save to backend (non-blocking — navigate even if it fails)
+    try {
+      await studentService.createMood(selectedMood);
+    } catch (e) {
+      // silently fail — app works offline too
+      console.log('[Mood] Backend save failed, continuing offline:', e?.message);
     }
+
+    navigation.navigate('MoodResult', {
+      mood: selectedMood,
+    });
   };
 
   return (
