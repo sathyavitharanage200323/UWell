@@ -30,17 +30,15 @@ app.get(['/', '/api/health'], (req, res) => {
 });
 
 // ─── Student Routes ───────────────────────────────────────────────────────────
-// Auth  : POST /api/auth/student/register OR /api/auth/register
-//         POST /api/auth/student/login    OR /api/auth/login
 const authRoutes = require('./src/routes/student/authRoutes');
 app.use('/api/auth/student', authRoutes);
 app.use('/api/auth', authRoutes);
 
-// Profile: GET/PUT /api/student/profile
-//          PUT     /api/student/change-password
-//          GET     /api/student/all
-//          GET     /api/student/:studentId
+// Profile: GET/PUT /api/student/profile  |  PUT /api/student/change-password
 app.use('/api/student', require('./src/routes/student/studentRoutes'));
+
+// Mood: CRUD /api/student/mood
+app.use('/api/student/mood', require('./src/routes/student/moodRoutes'));
 
 // ─── Global Error Handler ─────────────────────────────────────────────────────
 app.use((err, req, res, next) => {

@@ -12,19 +12,22 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { useAuth } from '../../context/AuthContext';
 
 export default function WellbeingRecommendation() {
   const navigation = useNavigation<any>();
+  const { login } = useAuth();
   const route = useRoute();
   const params = route.params as {
     email?: string; feeling?: string; stress?: string;
     sleep?: string; energy?: string; support?: string;
     fromRegistration?: boolean;
+    registeredUser?: any;
+    registeredToken?: string;
   } || {};
-  const { email, feeling, stress, sleep, energy, support, fromRegistration } = params;
+  const { email, feeling, stress, sleep, energy, support, fromRegistration, registeredUser, registeredToken } = params;
 
-  // If email came from registration, this is a new user in the auth flow
-  const isNewUser = !!fromRegistration || !!email;
+  const isNewUser = !!fromRegistration;
 
   // ====================================
   // Animations
@@ -154,6 +157,19 @@ export default function WellbeingRecommendation() {
   }, []);
 
   // ====================================
+  // Auto-login after registration + wellbeing
+  // ====================================
+
+  const handleLoginAndNavigate = async () => {
+    if (registeredUser && registeredToken) {
+      await login({ ...registeredUser, token: registeredToken });
+      // AuthNavigator will automatically switch to StudentNavigator
+    } else {
+      navigation.navigate('Login');
+    }
+  };
+
+  // ====================================
   // Recommendation Logic
   // ====================================
 
@@ -245,7 +261,7 @@ export default function WellbeingRecommendation() {
       'Find a Counselor'
     ) {
       if (isNewUser) {
-        navigation.navigate('Login');
+        handleLoginAndNavigate();
       } else {
         navigation.getParent()?.navigate('Counselors');
       }
@@ -253,7 +269,7 @@ export default function WellbeingRecommendation() {
     }
 
     if (isNewUser) {
-      navigation.navigate('Login');
+      handleLoginAndNavigate();
     } else {
       navigation.getParent()?.navigate('Resources');
     }
@@ -1037,7 +1053,7 @@ export default function WellbeingRecommendation() {
         <Pressable
           style={styles.secondaryButton}
           onPress={() => isNewUser
-            ? navigation.navigate('Login')
+            ? handleLoginAndNavigate()
             : navigation.getParent()?.navigate('Home')
           }
         >
