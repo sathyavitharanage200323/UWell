@@ -76,6 +76,48 @@ const resourceContent: Record<
     ],
   },
 
+  'break': {
+    title: 'Take a Short Break',
+    category: 'Relaxation Technique',
+    description:
+      'Taking short, intentional breaks from study or screen time helps your brain recover and improves your focus and mood.',
+    tips: [
+      'Step away from your desk for 5–10 minutes every hour.',
+      'Go outside for some fresh air if possible.',
+      'Do a light stretch or walk around.',
+      'Avoid scrolling social media during your break.',
+      'Use your break to hydrate or have a healthy snack.',
+    ],
+  },
+
+  'hydrated': {
+    title: 'Stay Hydrated',
+    category: 'Self Care',
+    description:
+      'Drinking enough water throughout the day supports your concentration, energy levels, and overall mental wellbeing.',
+    tips: [
+      'Aim to drink at least 6–8 glasses of water a day.',
+      'Keep a water bottle at your desk as a reminder.',
+      'Drink a glass of water when you wake up.',
+      'Reduce sugary drinks and excessive caffeine.',
+      'Eat fruits and vegetables that have high water content.',
+    ],
+  },
+
+  'support': {
+    title: 'Talk to Someone',
+    category: 'Support & Connection',
+    description:
+      'Talking about how you feel can help reduce stress and anxiety. You do not have to face difficulties alone.',
+    tips: [
+      'Reach out to a trusted friend, family member, or classmate.',
+      'Consider speaking with a counselor through UWell.',
+      'Share how you are feeling instead of keeping it inside.',
+      'Remember that asking for help is a sign of strength.',
+      'Join a student support group or wellness activity on campus.',
+    ],
+  },
+
   '4': {
     title: 'Mental Health Tips',
     category: 'Mental Wellbeing',

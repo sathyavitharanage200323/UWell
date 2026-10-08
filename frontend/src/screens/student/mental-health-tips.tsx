@@ -25,7 +25,7 @@ const BORDER = '#F0E2DC';
 
 const TIPS = [
   {
-    id: '3',
+    id: 'break',
     iconType: 'break',
     title: 'Take a short break',
     description:
@@ -45,7 +45,7 @@ const TIPS = [
     iconColor: CORAL,
   },
   {
-    id: '2',
+    id: 'hydrated',
     iconType: 'water',
     title: 'Stay hydrated',
     description:
@@ -75,7 +75,7 @@ const TIPS = [
     iconColor: '#81965F',
   },
   {
-    id: '6',
+    id: 'support',
     iconType: 'support',
     title: 'Talk to someone',
     description:
