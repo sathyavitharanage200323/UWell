@@ -19,8 +19,12 @@ export default function WellbeingRecommendation() {
   const params = route.params as {
     email?: string; feeling?: string; stress?: string;
     sleep?: string; energy?: string; support?: string;
+    fromRegistration?: boolean;
   } || {};
-  const { email, feeling, stress, sleep, energy, support } = params;
+  const { email, feeling, stress, sleep, energy, support, fromRegistration } = params;
+
+  // If email came from registration, this is a new user in the auth flow
+  const isNewUser = !!fromRegistration || !!email;
 
   // ====================================
   // Animations
@@ -240,11 +244,19 @@ export default function WellbeingRecommendation() {
       recommendation.action ===
       'Find a Counselor'
     ) {
-      navigation.getParent()?.navigate('Counselors');
+      if (isNewUser) {
+        navigation.navigate('Login');
+      } else {
+        navigation.getParent()?.navigate('Counselors');
+      }
       return;
     }
 
-    navigation.getParent()?.navigate('Resources');
+    if (isNewUser) {
+      navigation.navigate('Login');
+    } else {
+      navigation.getParent()?.navigate('Resources');
+    }
   };
 
   // ====================================
@@ -1024,7 +1036,10 @@ export default function WellbeingRecommendation() {
 
         <Pressable
           style={styles.secondaryButton}
-          onPress={() => navigation.getParent()?.navigate('Home')}
+          onPress={() => isNewUser
+            ? navigation.navigate('Login')
+            : navigation.getParent()?.navigate('Home')
+          }
         >
           <Text
             style={styles.secondaryButtonText}

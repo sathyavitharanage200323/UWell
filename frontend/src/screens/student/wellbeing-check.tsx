@@ -56,8 +56,8 @@ const supportOptions = [
 export default function WellbeingCheck() {
   const navigation = useNavigation<any>();
   const route = useRoute();
-  const params = route.params as { email?: string } || {};
-  const { email } = params;
+  const params = route.params as { email?: string; fromRegistration?: boolean } || {};
+  const { email, fromRegistration } = params;
 
   // ------------------------------------
   // Answers
@@ -183,6 +183,7 @@ export default function WellbeingCheck() {
     ]).start(() => {
       navigation.navigate('WellbeingRecommendation', {
         email: email || '',
+        fromRegistration: fromRegistration || false,
         feeling,
         stress,
         sleep,

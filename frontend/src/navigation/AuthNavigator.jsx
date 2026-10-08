@@ -9,6 +9,8 @@ import WelcomeScreen from '../screens/auth/WelcomeScreen';
 import SplashWelcomeScreen from '../screens/auth/SplashWelcomeScreen';
 import ConsentScreen from '../screens/auth/ConsentScreen';
 import LoginScreen from '../screens/auth/LoginScreen';
+import WellbeingCheckScreen from '../screens/student/wellbeing-check';
+import WellbeingRecommendationScreen from '../screens/student/wellbeing-recommendation';
 // ── Legacy single-form register (kept as fallback, unused in main flow) ──
 import RegisterScreen from '../screens/auth/RegisterScreen';
 // ── New: role-selector + four separate registration screens ──────────────
@@ -61,6 +63,10 @@ const AuthNavigator = () => {
       <Stack.Screen name="Welcome"  component={SplashWelcomeScreen} />
       <Stack.Screen name="Consent"  component={ConsentScreen} />
       <Stack.Screen name="Login"    component={LoginScreen} />
+
+      {/* New user wellbeing flow — after student registration */}
+      <Stack.Screen name="WellbeingCheck"          component={WellbeingCheckScreen} />
+      <Stack.Screen name="WellbeingRecommendation" component={WellbeingRecommendationScreen} />
 
       {/* Register → role selector (replaces old single RegisterScreen) */}
       <Stack.Screen name="Register"          component={RegisterSelectScreen} />
