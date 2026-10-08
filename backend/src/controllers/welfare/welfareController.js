@@ -146,21 +146,84 @@ exports.getDashboard = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Welfare officer not found' });
     }
 
+    // ── Real stats from DB ──────────────────────────────────────────────────
+    const [
+      upcomingCount,
+      completedCount,
+      cancelledCount,
+      totalAppointments,
+      availableCounselors,
+      inSessionCounselors,
+      totalCounselors,
+      todayAppointments,
+    ] = await Promise.all([
+      // Appointments by status (support both capitalised and lowercase)
+      Appointment.countDocuments({ status: { $in: ['upcoming', 'Upcoming', 'scheduled', 'Scheduled'] } }),
+      Appointment.countDocuments({ status: { $in: ['completed', 'Completed', 'done'] } }),
+      Appointment.countDocuments({ status: { $in: ['cancelled', 'Cancelled', 'canceled'] } }),
+      Appointment.countDocuments({}),
+
+      // Counselors by status
+      Counselor.countDocuments({ isApproved: true, status: 'Available' }),
+      Counselor.countDocuments({ isApproved: true, status: { $in: ['In Session', 'in-session'] } }),
+      Counselor.countDocuments({ isApproved: true }),
+
+      // Today's activity – appointments created today or with date containing today's date
+      Appointment.find()
+        .populate('student', 'firstName lastName studentId')
+        .populate('counselor', 'firstName lastName specialization')
+        .sort({ createdAt: -1 })
+        .limit(10),
+    ]);
+
+    // Format today's service activity
+    const todayActivity = todayAppointments.map((a) => {
+      const studentName =
+        a.studentName ||
+        (a.student ? `${a.student.firstName || ''} ${a.student.lastName || ''}`.trim() : 'Student');
+      const counselorName =
+        a.counselorName ||
+        (a.counselor ? `${a.counselor.firstName || ''} ${a.counselor.lastName || ''}`.trim() : 'Counselor');
+
+      const rawStatus = (a.status || '').toLowerCase();
+      let displayStatus = 'Scheduled';
+      if (rawStatus === 'completed' || rawStatus === 'done') displayStatus = 'Completed';
+      else if (rawStatus === 'cancelled' || rawStatus === 'canceled') displayStatus = 'Cancelled';
+      else if (rawStatus === 'in-session' || rawStatus === 'in session') displayStatus = 'In Progress';
+      else if (rawStatus === 'upcoming' || rawStatus === 'scheduled') displayStatus = 'Scheduled';
+
+      return {
+        id: a._id.toString(),
+        studentName,
+        counselorName,
+        service: a.counselorSpecialization || a.counselor?.specialization || 'Student Counselling',
+        time: a.time,
+        date: a.date,
+        status: displayStatus,
+      };
+    });
+
     res.status(200).json({
       success: true,
       officer: welfare.toSafeObject(),
       stats: {
-        totalSupported: 142,
-        activeCases: 28,
-        referrals: 19,
-        resolvedCases: 95,
+        upcomingAppointments: upcomingCount,
+        availableCounselors,
+        completedSessions: completedCount,
+        cancelledAppointments: cancelledCount,
+        totalAppointments,
+        inSessionCounselors,
+        totalCounselors,
+        pendingRequests: upcomingCount, // alias for upcoming
       },
+      todayActivity,
     });
   } catch (error) {
     console.error('❌ getDashboard welfare error:', error);
     res.status(500).json({ success: false, message: 'Server error fetching dashboard' });
   }
 };
+
 
 // ── Get All Welfare Officers (For Management or Directory) ────────────────────
 exports.getAllWelfareOfficers = async (req, res) => {
