@@ -39,11 +39,10 @@ const CounselorRootNavigator = () => (
 
 const AuthNavigator = () => {
   const { isAuthenticated, isLoading, user } = useAuth();
-  const [showLoading, setShowLoading] = React.useState(true);
 
-  if (isLoading && showLoading) {
-    const LoadingScreen = require('../screens/auth/LoadingScreen').default;
-    return <LoadingScreen onGetStarted={() => setShowLoading(false)} />;
+  // Show splash+welcome while auth state is loading
+  if (isLoading) {
+    return null; // or a minimal loading indicator
   }
 
   if (isAuthenticated) {
