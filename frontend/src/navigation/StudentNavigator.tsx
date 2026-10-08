@@ -37,6 +37,7 @@ const HomeStackScreen = () => (
   <HomeStack.Navigator screenOptions={{ headerShown: false }}>
     <HomeStack.Screen name="HomeMain" component={HomeScreen} />
     <HomeStack.Screen name="MentalHealthTips" component={MentalHealthTipsScreen} />
+    <HomeStack.Screen name="ResourceDetails" component={ResourceDetailsScreen} />
     <HomeStack.Screen name="WellbeingCheck" component={WellbeingCheckScreen} />
     <HomeStack.Screen name="WellbeingRecommendation" component={WellbeingRecommendationScreen} />
   </HomeStack.Navigator>
