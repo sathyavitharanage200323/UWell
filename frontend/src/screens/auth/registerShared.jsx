@@ -413,27 +413,73 @@ const tcStyles = StyleSheet.create({
 });
 
 // ─── SuccessView ─────────────────────────────────────────────────────────
-export const SuccessView = ({ role, onLogin, userData, onContinue }) => (
+// ─── SuccessView ─────────────────────────────────────────────────────────
+export const SuccessView = ({ role, onLogin, userData, onContinue, isPendingApproval = false }) => (
   <View style={svStyles.wrap}>
-    <View style={svStyles.circle}>
-      <Feather name="check" size={40} color={colors.white} />
+    <View style={[svStyles.circle, isPendingApproval && { backgroundColor: '#F59E0B', shadowColor: '#F59E0B' }]}>
+      <Feather name={isPendingApproval ? 'clock' : 'check'} size={38} color={colors.white} />
     </View>
-    <Text style={svStyles.title}>Account Created!</Text>
-    <Text style={svStyles.sub}>
-      Your {role} account has been registered and saved to the database.
+    <Text style={svStyles.title}>
+      {isPendingApproval ? 'Registration Submitted!' : 'Account Created!'}
     </Text>
+    <Text style={svStyles.sub}>
+      {isPendingApproval
+        ? `Your ${role} registration has been received. Only a manager can approve counselor and welfare officer registrations before login is enabled.`
+        : `Your ${role} account has been registered and saved to the database.`}
+    </Text>
+
+    {isPendingApproval && (
+      <View style={svStyles.pendingNotice}>
+        <Feather name="shield" size={16} color="#B45309" style={{ marginRight: 6 }} />
+        <Text style={svStyles.pendingNoticeText}>
+          Requires Management Approval Before Login
+        </Text>
+      </View>
+    )}
 
     {userData && (
       <View style={svStyles.dataCard}>
-        <Text style={svStyles.dataCardTitle}>Registered Student Details</Text>
+        <Text style={svStyles.dataCardTitle}>
+          {isPendingApproval ? 'Submitted Registration Details' : 'Account Details'}
+        </Text>
         <View style={svStyles.dataRow}>
           <Text style={svStyles.dataLabel}>Full Name:</Text>
           <Text style={svStyles.dataValue}>{userData.fullName || `${userData.firstName} ${userData.lastName}`}</Text>
         </View>
         <View style={svStyles.dataRow}>
-          <Text style={svStyles.dataLabel}>Student ID:</Text>
-          <Text style={svStyles.dataValueHighlight}>{userData.studentId}</Text>
+          <Text style={svStyles.dataLabel}>{userData.studentId ? 'Student ID:' : 'Staff ID:'}</Text>
+          <Text style={svStyles.dataValueHighlight}>{userData.studentId || userData.staffId || userData.employeeId}</Text>
         </View>
+        {userData.role ? (
+          <View style={svStyles.dataRow}>
+            <Text style={svStyles.dataLabel}>Role:</Text>
+            <Text style={[svStyles.dataValue, { textTransform: 'capitalize' }]}>{userData.role}</Text>
+          </View>
+        ) : null}
+        {userData.qualification ? (
+          <View style={svStyles.dataRow}>
+            <Text style={svStyles.dataLabel}>Qualification:</Text>
+            <Text style={svStyles.dataValue}>{userData.qualification}</Text>
+          </View>
+        ) : null}
+        {userData.specialization ? (
+          <View style={svStyles.dataRow}>
+            <Text style={svStyles.dataLabel}>Specialization:</Text>
+            <Text style={svStyles.dataValue}>{userData.specialization}</Text>
+          </View>
+        ) : null}
+        {userData.department ? (
+          <View style={svStyles.dataRow}>
+            <Text style={svStyles.dataLabel}>Department:</Text>
+            <Text style={svStyles.dataValue}>{userData.department}</Text>
+          </View>
+        ) : null}
+        {userData.position ? (
+          <View style={svStyles.dataRow}>
+            <Text style={svStyles.dataLabel}>Position:</Text>
+            <Text style={svStyles.dataValue}>{userData.position}</Text>
+          </View>
+        ) : null}
         {userData.faculty ? (
           <View style={svStyles.dataRow}>
             <Text style={svStyles.dataLabel}>Faculty:</Text>
@@ -456,23 +502,27 @@ export const SuccessView = ({ role, onLogin, userData, onContinue }) => (
           <Text style={svStyles.dataLabel}>Email:</Text>
           <Text style={svStyles.dataValue}>{userData.email}</Text>
         </View>
+        {userData.phone ? (
+          <View style={svStyles.dataRow}>
+            <Text style={svStyles.dataLabel}>Phone:</Text>
+            <Text style={svStyles.dataValue}>{userData.phone}</Text>
+          </View>
+        ) : null}
       </View>
     )}
 
-    {onContinue && (
+    {onContinue && !isPendingApproval && (
       <TouchableOpacity style={svStyles.btn} onPress={onContinue} accessibilityRole="button">
         <Text style={svStyles.btnText}>Go to Dashboard</Text>
       </TouchableOpacity>
     )}
 
     <TouchableOpacity
-      style={[svStyles.btnSecondary, !onContinue && svStyles.btn]}
+      style={[svStyles.btn, isPendingApproval && { backgroundColor: '#F59E0B' }]}
       onPress={onLogin}
       accessibilityRole="button"
     >
-      <Text style={[svStyles.btnSecondaryText, !onContinue && svStyles.btnText]}>
-        {onContinue ? 'Go to Login Instead' : 'Go to Login'}
-      </Text>
+      <Text style={svStyles.btnText}>Return to Login</Text>
     </TouchableOpacity>
   </View>
 );
@@ -489,7 +539,23 @@ const svStyles = StyleSheet.create({
     shadowOpacity: 0.3, shadowRadius: 12, elevation: 6,
   },
   title: { fontSize: 22, fontWeight: '700', color: colors.darkText, marginBottom: 8, textAlign: 'center' },
-  sub:   { fontSize: 13, color: colors.textSecondary, textAlign: 'center', lineHeight: 20, marginBottom: 20 },
+  sub:   { fontSize: 13, color: colors.textSecondary, textAlign: 'center', lineHeight: 20, marginBottom: 16 },
+  pendingNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    borderColor: '#FDE68A',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    marginBottom: 16,
+  },
+  pendingNoticeText: {
+    color: '#92400E',
+    fontSize: 12,
+    fontWeight: '700',
+  },
   dataCard: {
     width: '100%',
     backgroundColor: colors.white,

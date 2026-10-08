@@ -11,6 +11,16 @@ export const welfareService = {
     return response.data;
   },
 
+  updateSchedule: async (scheduleData) => {
+    const response = await api.put('/welfare/schedule', scheduleData);
+    return response.data;
+  },
+
+  getByStaffId: async (staffId) => {
+    const response = await api.get(`/welfare/staff/${encodeURIComponent(staffId)}`);
+    return response.data;
+  },
+
   getDashboardStats: async () => {
     const response = await api.get('/welfare/dashboard');
     return response.data;
@@ -38,6 +48,16 @@ export const welfareService = {
 
   getServices: async () => {
     const response = await api.get('/welfare/services');
+    return response.data;
+  },
+
+  getCounselingServices: async () => {
+    const response = await api.get('/welfare/services/counseling');
+    return response.data;
+  },
+
+  updateCounselorStatus: async (counselorId, status) => {
+    const response = await api.put(`/welfare/counselor/${counselorId}/status`, { status });
     return response.data;
   },
 

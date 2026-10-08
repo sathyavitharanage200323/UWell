@@ -15,13 +15,12 @@ export const AuthProvider = ({ children }) => {
 
   const loadUserFromStorage = async () => {
     try {
-      // DEV: clear old session so splash always shows on fresh load
-      // Remove this block after backend login is connected
-      await AsyncStorage.removeItem('user');
-      await AsyncStorage.removeItem('token');
-      setIsLoading(false);
-      return;
-      // END DEV block
+      const storedUser = await AsyncStorage.getItem('user');
+      if (storedUser) {
+        const userData = JSON.parse(storedUser);
+        setUser(userData);
+        setIsAuthenticated(true);
+      }
     } catch (error) {
       console.error('Error loading user from storage:', error);
     } finally {

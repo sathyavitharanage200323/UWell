@@ -29,18 +29,41 @@ app.get(['/', '/api/health'], (req, res) => {
   });
 });
 
-// ─── Student Routes ───────────────────────────────────────────────────────────
-// Auth  : POST /api/auth/student/register OR /api/auth/register
-//         POST /api/auth/student/login    OR /api/auth/login
-const authRoutes = require('./src/routes/student/authRoutes');
-app.use('/api/auth/student', authRoutes);
-app.use('/api/auth', authRoutes);
+// ─── Role Routes ──────────────────────────────────────────────────────────────
+const studentAuthRoutes = require('./src/routes/student/authRoutes');
+const counselorAuthRoutes = require('./src/routes/counselor/authRoutes');
+const welfareAuthRoutes = require('./src/routes/welfare/authRoutes');
+const managementRoutes = require('./src/routes/management/managementRoutes');
 
-// Profile: GET/PUT /api/student/profile
-//          PUT     /api/student/change-password
-//          GET     /api/student/all
-//          GET     /api/student/:studentId
+app.use('/api/auth/student', studentAuthRoutes);
+app.use('/api/auth/counselor', counselorAuthRoutes);
+app.use('/api/auth/welfare', welfareAuthRoutes);
+app.use('/api/auth/management', managementRoutes);
+
+// ─── Manager Workflow Routes ──────────────────────────────────────────────────
+// Pending requests, approval, rejection, and dashboard stats
+app.use('/api/management', managementRoutes);
+
+// ─── Unified Auth Endpoints ───────────────────────────────────────────────────
+app.post('/api/auth/login', (req, res, next) => {
+  const role = req.body.role || 'student';
+  if (role === 'counselor') {
+    return require('./src/controllers/counselor/authController').loginCounselor(req, res, next);
+  }
+  if (role === 'welfare') {
+    return require('./src/controllers/welfare/authController').loginWelfare(req, res, next);
+  }
+  if (role === 'management') {
+    return require('./src/controllers/management/managementController').loginManagement(req, res, next);
+  }
+  return require('./src/controllers/student/authController').loginStudent(req, res, next);
+});
+
+// Student Profile
 app.use('/api/student', require('./src/routes/student/studentRoutes'));
+
+// Welfare Officer Routes (Profile, Dashboard, Lookup by staffId)
+app.use('/api/welfare', require('./src/routes/welfare/welfareRoutes'));
 
 // ─── Global Error Handler ─────────────────────────────────────────────────────
 app.use((err, req, res, next) => {

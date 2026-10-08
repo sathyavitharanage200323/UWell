@@ -8,7 +8,12 @@ export const authService = {
       const response = await api.post(endpoint, { email, password, role });
       return response.data;
     } catch (error) {
-      // Offline / Demo Fallback Mode
+      // If server responded (e.g. 403 Pending Approval or 401 Invalid Credentials), rethrow so UI displays it
+      if (error.response?.data) {
+        throw error;
+      }
+
+      // Offline / Demo Fallback Mode (only when backend is completely offline)
       let userData = {
         id: 1,
         email: email || 'e.martinez@university.edu',
@@ -60,10 +65,50 @@ export const authService = {
     return response.data;
   },
 
+  // ── Management Approval Workflows ─────────────────────────────────────────
+  getPendingRequests: async () => {
+    const response = await api.get('/management/pending-requests');
+    return response.data;
+  },
+
+  getAllRequests: async (params) => {
+    const response = await api.get('/management/all-requests', { params });
+    return response.data;
+  },
+
+  approveRequest: async (userId, role) => {
+    const response = await api.post('/management/approve-request', { userId, role });
+    return response.data;
+  },
+
+  rejectRequest: async (userId, role, reason = '') => {
+    const response = await api.post('/management/reject-request', { userId, role, reason });
+    return response.data;
+  },
+
+  getDashboardStats: async () => {
+    const response = await api.get('/management/dashboard-stats');
+    return response.data;
+  },
+
+  getManagementProfile: async (params = {}) => {
+    try {
+      const response = await api.get('/management/profile', { params });
+      return response.data;
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  },
+
+  updateManagementProfile: async (data) => {
+    const response = await api.put('/management/profile', data);
+    return response.data;
+  },
+
   logout: async () => {
     try {
-      const response = await api.post('/auth/logout');
-      return response.data;
+      await api.post('/management/logout').catch(() => {});
+      return { success: true };
     } catch (error) {
       return { success: true };
     }

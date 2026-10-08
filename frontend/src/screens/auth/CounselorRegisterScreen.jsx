@@ -28,6 +28,7 @@ export default function CounselorRegisterScreen({ navigation }) {
   const [showPw, setShowPw]   = useState(false);
   const [showCPw, setShowCPw] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [registeredData, setRegisteredData] = useState(null);
 
   const set = (key, val) => { setF(p => ({ ...p, [key]: val })); if (errs[key]) setErrs(p => ({ ...p, [key]: null })); };
   const blur = (key) => { setTouched(p => ({ ...p, [key]: true })); validateField(key, f[key]); };
@@ -63,20 +64,39 @@ export default function CounselorRegisterScreen({ navigation }) {
     if (!validate()) return;
     try {
       setLoading(true);
-      await authService.register({
-        firstName: f.firstName.trim(), lastName: f.lastName.trim(),
-        staffId: f.staffId.trim(), email: f.email.trim(),
-        qualification: f.qualification, specialization: f.specialization,
-        yearsOfExperience: f.experience, phone: f.phone.trim(),
-        officeLocation: f.officeLocation.trim(), password: f.password, role: 'counselor',
-      });
+      const payload = {
+        firstName: f.firstName.trim(),
+        lastName: f.lastName.trim(),
+        staffId: f.staffId.trim().toUpperCase(),
+        email: f.email.trim().toLowerCase(),
+        qualification: f.qualification,
+        specialization: f.specialization,
+        yearsOfExperience: f.experience,
+        phone: f.phone.trim(),
+        officeLocation: f.officeLocation.trim(),
+        password: f.password,
+        role: 'counselor',
+      };
+      const res = await authService.register(payload);
+      setRegisteredData(res.user || payload);
       setSuccess(true);
     } catch (e) {
-      setErrs(p => ({ ...p, general: e.message || 'Registration failed.' }));
+      setErrs(p => ({ ...p, general: e.response?.data?.message || e.message || 'Registration failed.' }));
     } finally { setLoading(false); }
   };
 
-  if (success) return <SafeAreaView style={sharedStyles.safe}><SuccessView role="counselor" onLogin={() => navigation.navigate('Login')} /></SafeAreaView>;
+  if (success) {
+    return (
+      <SafeAreaView style={sharedStyles.safe}>
+        <SuccessView
+          role="counselor"
+          userData={registeredData}
+          isPendingApproval={true}
+          onLogin={() => navigation.navigate('Login')}
+        />
+      </SafeAreaView>
+    );
+  }
   const isOk = k => touched[k] && !errs[k] && f[k]?.trim?.();
 
   return (

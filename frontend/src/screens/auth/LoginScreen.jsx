@@ -158,7 +158,11 @@ const LoginScreen = ({ navigation }) => {
       const response = await authService.login(email, password, role);
       await login({ ...response.user, token: response.token });
     } catch (error) {
-      setErrors({ general: error.response?.data?.message || error.message || 'Login failed. Please try again.' });
+      const isPending = error.response?.data?.isPendingApproval;
+      setErrors({
+        general: error.response?.data?.message || error.message || 'Login failed. Please try again.',
+        isPendingApproval: !!isPending,
+      });
     } finally {
       setLoading(false);
     }
@@ -310,12 +314,25 @@ const LoginScreen = ({ navigation }) => {
               </TouchableOpacity>
             </View>
 
-            {/* General error */}
+            {/* General error or Pending Approval Banner */}
             {errors.general && (
-              <View style={styles.generalErrorBox}>
-                <Feather name="alert-circle" size={14} color={colors.statusRedText} />
-                <Text style={styles.generalErrorText}>{errors.general}</Text>
-              </View>
+              errors.isPendingApproval ? (
+                <View style={styles.pendingBox}>
+                  <View style={styles.pendingHeaderRow}>
+                    <Feather name="clock" size={16} color="#B45309" />
+                    <Text style={styles.pendingTitle}>Account Pending Approval</Text>
+                  </View>
+                  <Text style={styles.pendingMessage}>{errors.general}</Text>
+                  <Text style={styles.pendingSubtext}>
+                    A university manager must approve your registration from the Management Dashboard before you can sign in.
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.generalErrorBox}>
+                  <Feather name="alert-circle" size={14} color={colors.statusRedText} />
+                  <Text style={styles.generalErrorText}>{errors.general}</Text>
+                </View>
+              )
             )}
 
             {/* ── Login button ──────────────────────────────── */}
@@ -696,6 +713,36 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.statusRedText,
     flex: 1,
+  },
+  pendingBox: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: spacing.md,
+  },
+  pendingHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  pendingTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#92400E',
+  },
+  pendingMessage: {
+    fontSize: 12,
+    color: '#78350F',
+    lineHeight: 17,
+  },
+  pendingSubtext: {
+    fontSize: 11,
+    color: '#B45309',
+    marginTop: 6,
+    fontStyle: 'italic',
   },
 
   // ── Login button ─────────────────────────────────────────────

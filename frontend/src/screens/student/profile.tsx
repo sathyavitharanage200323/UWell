@@ -5,6 +5,7 @@ import {
   StyleSheet,
   Pressable,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -12,7 +13,24 @@ import { useAuth } from '../../context/AuthContext';
 
 export default function ProfileScreen() {
   const navigation = useNavigation<any>();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Log Out',
+      'Are you sure you want to log out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Log Out',
+          style: 'destructive',
+          onPress: async () => {
+            if (logout) await logout();
+          },
+        },
+      ]
+    );
+  };
 
   const fullName = user?.fullName || (user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : 'Wasana');
   const studentId = user?.studentId || 'STU20240001';
@@ -247,13 +265,13 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* Back Home */}
+        {/* Log Out */}
         <Pressable
-          style={styles.homeButton}
-          onPress={() => navigation.getParent()?.navigate('Home')}
+          style={styles.logoutButton}
+          onPress={handleLogout}
         >
-          <Text style={styles.homeButtonText}>
-            Back to Home
+          <Text style={styles.logoutButtonText}>
+            Log Out
           </Text>
         </Pressable>
       </ScrollView>
@@ -473,17 +491,18 @@ const styles = StyleSheet.create({
     color: '#806F69',
   },
 
-  homeButton: {
+  logoutButton: {
     height: 52,
-    backgroundColor: '#F47F69',
+    backgroundColor: '#DC2626',
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
-  homeButtonText: {
+  logoutButtonText: {
     fontSize: 15,
     fontWeight: '700',
     color: '#FFFFFF',
+    letterSpacing: 0.3,
   },
 });

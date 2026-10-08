@@ -22,7 +22,7 @@ const UsageStackScreen = () => (
 
 const ProfileStackScreen = () => (
   <ProfileStack.Navigator screenOptions={{ headerShown: false }}>
-    <ProfileStack.Screen name="Profile" component={ProfileScreen} />
+    <ProfileStack.Screen name="ProfileMain" component={ProfileScreen} />
     <ProfileStack.Screen name="PrivacySecurity" component={PrivacySecurityScreen} />
   </ProfileStack.Navigator>
 );

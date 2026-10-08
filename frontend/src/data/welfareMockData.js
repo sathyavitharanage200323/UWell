@@ -95,30 +95,105 @@ export const appointmentDetailsMap = {
 };
 
 export const supportDirectories = [
-  { id: 'sd-1', title: 'Counseling Service', description: 'Professional counseling for personal and academic concerns.', icon: 'chatbubble-ellipses-outline' },
-  { id: 'sd-2', title: 'Academic Support', description: 'Tutoring, study skills, and academic advising.', icon: 'school-outline' },
-  { id: 'sd-3', title: 'Student Welfare Support', description: 'Financial aid, housing assistance, and wellbeing programs.', icon: 'home-outline' },
-  { id: 'sd-4', title: 'Emergency Support', description: 'Crisis hotline and immediate assistance resources.', icon: 'alert-circle-outline', urgent: true }
+  {
+    id: 'sd-1',
+    category: 'counseling',
+    title: 'Counseling Service',
+    description: 'Professional counseling for personal and academic concerns.',
+    icon: 'chatbubble-ellipses-outline',
+    urgent: false,
+    tag: 'LICENSED CLINICAL SUPPORT',
+    about: 'Our fully-certified counseling service focuses on providing students with direct, confidential access to licensed psychologists, welfare workers, and crisis counselors during stressful semesters.',
+    servicesOffered: [
+      'Individual Counseling Programs',
+      'Group Therapy & Stress Management',
+      'Crisis Intervention Protocols',
+      'Peer Support Programs & Outreach',
+      'Confidential Psychiatric Referrals'
+    ],
+    contact: {
+      phone: '+1 (555) 019-2834',
+      email: 'counseling.center@university.edu',
+      hours: 'Monday – Friday, 8:30 AM – 5:00 PM',
+      leadOfficer: 'Dr. Evelyn Martinez (Lead Counselor)'
+    },
+    location: 'Room 105, Student Services Building (Adjacent to Main Library)'
+  },
+  {
+    id: 'sd-2',
+    category: 'academic',
+    title: 'Academic Support',
+    description: 'Tutoring, study skills, and academic advising.',
+    icon: 'school-outline',
+    urgent: false,
+    tag: 'ACADEMIC EXCELLENCE & ADVISORY',
+    about: 'Dedicated academic guidance helping students navigate coursework challenges, exam preparations, time allocation, academic probation recovery, and study strategy enhancements.',
+    servicesOffered: [
+      'One-on-One Peer Tutoring',
+      'Study Skills & Time Management Workshops',
+      'Academic Probation Coaching',
+      'Exam Preparation & Review Sessions',
+      'Specialized Learning Accommodation Services'
+    ],
+    contact: {
+      phone: '+1 (555) 019-4455',
+      email: 'academic.support@university.edu',
+      hours: 'Monday – Saturday, 8:00 AM – 6:00 PM',
+      leadOfficer: 'Prof. David Miller (Academic Support Coordinator)'
+    },
+    location: 'Building B, 2nd Floor, Academic Commons Desk'
+  },
+  {
+    id: 'sd-3',
+    category: 'welfare',
+    title: 'Student Welfare Support',
+    description: 'Financial aid, housing assistance, and wellbeing programs.',
+    icon: 'home-outline',
+    urgent: false,
+    tag: 'STUDENT WELLBEING & WELFARE',
+    about: 'Primary hub for student wellbeing. Assisting students with hardship subsidies, campus hostel accommodation, community wellbeing initiatives, and disability assistance.',
+    servicesOffered: [
+      'Emergency Student Hardship Grants',
+      'Hostel & Off-Campus Accommodation Mediation',
+      'Meal Assistance Vouchers & Food Security',
+      'Health Insurance Guidance',
+      'Disability Access & Adaptive Equipment Support'
+    ],
+    contact: {
+      phone: '+1 (555) 019-3322',
+      email: 'student.welfare@university.edu',
+      hours: 'Monday – Friday, 9:00 AM – 4:30 PM',
+      leadOfficer: 'Jon Wick (Senior Welfare Officer)'
+    },
+    location: 'Block C, Ground Floor, Welfare Office 04'
+  },
+  {
+    id: 'sd-4',
+    category: 'emergency',
+    title: 'Emergency Support',
+    description: 'Crisis hotline and immediate assistance resources.',
+    icon: 'alert-circle-outline',
+    urgent: true,
+    tag: '24/7 CRISIS RESPONSE & SAFETY',
+    about: 'Immediate emergency support hotline for students experiencing acute psychological crisis, safety concerns, medical emergencies, or severe distress on or off campus.',
+    servicesOffered: [
+      '24/7 Crisis Hotline & Suicide Prevention Support',
+      'Emergency Medical & First Aid Response',
+      'Campus Security Safety Escort',
+      'Trauma & Crisis De-escalation Intervention',
+      'Urgent Temporary Safe Haven Housing'
+    ],
+    contact: {
+      phone: '+1 (555) 911-HELP / 1990',
+      email: 'crisis.response@university.edu',
+      hours: '24 Hours / 7 Days a week (Always Open)',
+      leadOfficer: 'Emergency Response Unit & Campus Safety'
+    },
+    location: 'Campus Security & Health Centre, Gate 1 Emergency Entrance'
+  }
 ];
 
-export const counselingServiceDetails = {
-  id: 'svc-counseling',
-  tag: 'OFFICIAL RESOURCE',
-  title: 'Counseling Service',
-  about: 'Our fully-certified counseling service focuses on providing students with direct, confidential access to licensed psychologists, welfare workers, and crisis negotiators during stressful semesters.',
-  servicesOffered: [
-    'Individual Counseling Programs',
-    'Group Therapy Sessions',
-    'Crisis Intervention Protocols',
-    'Peer Support Programs & Outreach'
-  ],
-  contact: {
-    phone: '+1 (555) 019-2834',
-    email: 'welfare.support@university.edu',
-    hours: 'Monday – Friday, 9:00 AM – 5:00 PM'
-  },
-  location: 'Room 105, Student Services Building (Adjacent to Main Library)'
-};
+export const counselingServiceDetails = supportDirectories[0];
 
 export const welfareNotifications = [
   { id: 'n-1', type: 'request', title: 'New Appointment Request', message: 'Student D requested an emergency counseling slot.', timestamp: '10m ago', unread: true },
