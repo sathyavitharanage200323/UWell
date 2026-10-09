@@ -91,20 +91,22 @@ exports.loginWelfare = async (req, res) => {
       return res.status(401).json({ success: false, message: 'Invalid credentials. Please check your work email or Staff ID.' });
     }
 
-    // Check Manager Approval first: account cannot log in until manager approves
-    if (welfare.approvalStatus === 'pending' || !welfare.isApproved) {
-      return res.status(403).json({
-        success: false,
-        isPendingApproval: true,
-        message: 'Your account is pending manager approval. Please wait for an administrator to review and approve your registration.',
-      });
-    }
-
+    // Rejected accounts are checked first: a rejected account is also not approved,
+    // so the pending check below would otherwise hide the rejection.
     if (welfare.approvalStatus === 'rejected') {
       return res.status(403).json({
         success: false,
         isRejected: true,
         message: `Your registration was rejected by management.${welfare.rejectionReason ? ' Reason: ' + welfare.rejectionReason : ''}`,
+      });
+    }
+
+    // Account cannot log in until manager approves
+    if (welfare.approvalStatus === 'pending' || !welfare.isApproved) {
+      return res.status(403).json({
+        success: false,
+        isPendingApproval: true,
+        message: 'Your account is pending manager approval. Please wait for an administrator to review and approve your registration.',
       });
     }
 
