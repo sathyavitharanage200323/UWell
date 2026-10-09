@@ -72,12 +72,23 @@ exports.loginWelfare = async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) {
-      return res.status(400).json({ success: false, message: 'Email and password are required' });
+      return res.status(400).json({ success: false, message: 'Work email/Staff ID and password are required' });
     }
 
-    const welfare = await Welfare.findOne({ email: email.trim().toLowerCase() }).select('+password');
+    const rawInput = (email || '').trim();
+    const emailLower = rawInput.toLowerCase();
+    const idUpper = rawInput.toUpperCase();
+
+    // Support login by email OR staffId
+    const welfare = await Welfare.findOne({
+      $or: [
+        { email: emailLower },
+        { staffId: idUpper },
+      ],
+    }).select('+password');
+
     if (!welfare) {
-      return res.status(401).json({ success: false, message: 'Invalid credentials' });
+      return res.status(401).json({ success: false, message: 'Invalid credentials. Please check your work email or Staff ID.' });
     }
 
     // Check Manager Approval first: account cannot log in until manager approves

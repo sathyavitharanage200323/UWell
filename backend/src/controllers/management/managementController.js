@@ -256,30 +256,51 @@ exports.getAllRequests = async (req, res) => {
 // ── Approve Request ───────────────────────────────────────────────────────────
 exports.approveRequest = async (req, res) => {
   try {
-    const { userId, role } = req.body;
-    if (!userId || !role) {
-      return res.status(400).json({ success: false, message: 'userId and role are required' });
+    const targetId = req.body.userId || req.body.id || req.body._id;
+    const rawRole = (req.body.role || '').toLowerCase().trim();
+
+    if (!targetId) {
+      return res.status(400).json({ success: false, message: 'User ID is required' });
     }
 
-    const Model = role === 'counselor' ? Counselor : Welfare;
-    const user = await Model.findById(userId);
+    const isCounselor = rawRole.includes('counselor');
+    let Model = isCounselor ? Counselor : Welfare;
+    let actualRole = isCounselor ? 'counselor' : 'welfare';
+
+    let user = await Model.findById(targetId);
+    if (!user) {
+      // Fallback: search the other collection in case role was omitted or mismatched
+      const AltModel = isCounselor ? Welfare : Counselor;
+      const altUser = await AltModel.findById(targetId);
+      if (altUser) {
+        Model = AltModel;
+        user = altUser;
+        actualRole = isCounselor ? 'welfare' : 'counselor';
+      }
+    }
 
     if (!user) {
-      return res.status(404).json({ success: false, message: `${role} account not found` });
+      return res.status(404).json({ success: false, message: 'User account not found' });
     }
 
-    user.approvalStatus = 'approved';
-    user.isApproved = true;
-    user.approvedAt = new Date();
-    user.approvedBy = req.user?.id || 'Admin';
-    user.rejectionReason = '';
-
-    await user.save();
+    const updatedUser = await Model.findByIdAndUpdate(
+      user._id,
+      {
+        $set: {
+          approvalStatus: 'approved',
+          isApproved: true,
+          approvedAt: new Date(),
+          approvedBy: req.user?.id || 'Admin',
+          rejectionReason: '',
+        },
+      },
+      { new: true, runValidators: false }
+    );
 
     res.status(200).json({
       success: true,
-      message: `${user.fullName} (${role}) has been approved successfully. They can now log in.`,
-      user: user.toSafeObject(),
+      message: `${updatedUser.fullName || updatedUser.firstName} (${actualRole}) has been approved successfully. They can now log in.`,
+      user: updatedUser.toSafeObject ? updatedUser.toSafeObject() : updatedUser,
     });
   } catch (error) {
     console.error('❌ approveRequest error:', error);
@@ -290,28 +311,49 @@ exports.approveRequest = async (req, res) => {
 // ── Reject Request ────────────────────────────────────────────────────────────
 exports.rejectRequest = async (req, res) => {
   try {
-    const { userId, role, reason } = req.body;
-    if (!userId || !role) {
-      return res.status(400).json({ success: false, message: 'userId and role are required' });
+    const targetId = req.body.userId || req.body.id || req.body._id;
+    const rawRole = (req.body.role || '').toLowerCase().trim();
+    const reason = req.body.reason || 'Registration rejected by administrator.';
+
+    if (!targetId) {
+      return res.status(400).json({ success: false, message: 'User ID is required' });
     }
 
-    const Model = role === 'counselor' ? Counselor : Welfare;
-    const user = await Model.findById(userId);
+    const isCounselor = rawRole.includes('counselor');
+    let Model = isCounselor ? Counselor : Welfare;
+    let actualRole = isCounselor ? 'counselor' : 'welfare';
+
+    let user = await Model.findById(targetId);
+    if (!user) {
+      const AltModel = isCounselor ? Welfare : Counselor;
+      const altUser = await AltModel.findById(targetId);
+      if (altUser) {
+        Model = AltModel;
+        user = altUser;
+        actualRole = isCounselor ? 'welfare' : 'counselor';
+      }
+    }
 
     if (!user) {
-      return res.status(404).json({ success: false, message: `${role} account not found` });
+      return res.status(404).json({ success: false, message: 'User account not found' });
     }
 
-    user.approvalStatus = 'rejected';
-    user.isApproved = false;
-    user.rejectionReason = reason || 'Registration rejected by administrator.';
-
-    await user.save();
+    const updatedUser = await Model.findByIdAndUpdate(
+      user._id,
+      {
+        $set: {
+          approvalStatus: 'rejected',
+          isApproved: false,
+          rejectionReason: reason,
+        },
+      },
+      { new: true, runValidators: false }
+    );
 
     res.status(200).json({
       success: true,
-      message: `${user.fullName} (${role}) registration request has been rejected.`,
-      user: user.toSafeObject(),
+      message: `${updatedUser.fullName || updatedUser.firstName} (${actualRole}) registration request has been rejected.`,
+      user: updatedUser.toSafeObject ? updatedUser.toSafeObject() : updatedUser,
     });
   } catch (error) {
     console.error('❌ rejectRequest error:', error);

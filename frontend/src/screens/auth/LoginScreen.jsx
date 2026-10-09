@@ -149,7 +149,7 @@ const LoginScreen = ({ navigation }) => {
   const handleLogin = async () => {
     const newErrors = {};
     const trimmedInput = (email || '').trim();
-    if (role === USER_ROLES.MANAGEMENT || role === USER_ROLES.WELFARE) {
+    if (role === USER_ROLES.MANAGEMENT || role === USER_ROLES.WELFARE || role === USER_ROLES.COUNSELOR) {
       if (!trimmedInput) {
         newErrors.email = 'Please enter your work email or ID';
       }
@@ -273,6 +273,8 @@ const LoginScreen = ({ navigation }) => {
                     ? 'e.g. hi@gmail.com or EMP1010'
                     : role === USER_ROLES.WELFARE
                     ? 'e.g. welfare@gmail.com or STF01'
+                    : role === USER_ROLES.COUNSELOR
+                    ? 'e.g. counselor@university.edu or CSL001'
                     : 'Enter your email'
                 }
                 placeholderTextColor={colors.textMuted}
