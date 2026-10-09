@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { useAudioPlayer } from 'expo-audio';
 
 const CORAL = '#EF806B';
 const CREAM = '#FFF9F3';
@@ -358,11 +359,17 @@ export default function ResourceDetailsScreen() {
   const slideAnim =
     useRef(new Animated.Value(15)).current;
 
- const breathingPlayer = {
-  play: () => {},
-  pause: () => {},
-  seekTo: (_: number) => {},
-};
+ // Calm ambient breathing music — always loaded, only plays during breathing activity
+ const breathingPlayer = useAudioPlayer(
+   { uri: 'https://cdn.pixabay.com/audio/2022/03/15/audio_d86fd5aad4.mp3' }
+ );
+
+ // Set looping so music plays continuously during breathing
+ useEffect(() => {
+   if (breathingPlayer) {
+     breathingPlayer.loop = true;
+   }
+ }, [breathingPlayer]);
 
   useEffect(() => {
     Animated.parallel([
@@ -416,14 +423,12 @@ export default function ResourceDetailsScreen() {
         }
 
         if (breathingCycle >= 3) {
-  breathingPlayer.pause();
-  breathingPlayer.seekTo(0);
-
-  setActivityCompleted(true);
-  setActivityStarted(false);
-
-  return 0;
-}
+          breathingPlayer.pause();
+          breathingPlayer.seekTo(0);
+          setActivityCompleted(true);
+          setActivityStarted(false);
+          return 0;
+        }
 
         setBreathingCycle((cycle) => cycle + 1);
         setBreathingPhase('inhale');
@@ -473,7 +478,7 @@ export default function ResourceDetailsScreen() {
       }).start();
 
       breathingPlayer.seekTo(0);
-breathingPlayer.play();
+      breathingPlayer.play();
     }
 
     if (activityType === 'movement') {
@@ -490,20 +495,19 @@ breathingPlayer.play();
   };
 
   const resetActivity = () => {
-  setActivityStarted(false);
-  setActivityCompleted(false);
-  setIsPaused(false);
-  setBreathingPhase('inhale');
-  setBreathingSeconds(4);
-  setBreathingCycle(1);
-  setMovementStep(0);
-  setHydrationDone(false);
-  setSupportChoice('');
-  breathingScale.setValue(0.72);
-
-  breathingPlayer.pause();
-  breathingPlayer.seekTo(0);
-};
+    setActivityStarted(false);
+    setActivityCompleted(false);
+    setIsPaused(false);
+    setBreathingPhase('inhale');
+    setBreathingSeconds(4);
+    setBreathingCycle(1);
+    setMovementStep(0);
+    setHydrationDone(false);
+    setSupportChoice('');
+    breathingScale.setValue(0.72);
+    breathingPlayer.pause();
+    breathingPlayer.seekTo(0);
+  };
 
   /* =======================================================
      ACTIVITY CONTENT
@@ -522,18 +526,16 @@ breathingPlayer.play();
           paused={isPaused}
           onStart={startActivity}
           onPause={() => {
-  setIsPaused((value) => {
-    const nextValue = !value;
-
-    if (nextValue) {
-      breathingPlayer.pause();
-    } else {
-      breathingPlayer.play();
-    }
-
-    return nextValue;
-  });
-}}
+            setIsPaused((value) => {
+              const nextValue = !value;
+              if (nextValue) {
+                breathingPlayer.pause();
+              } else {
+                breathingPlayer.play();
+              }
+              return nextValue;
+            });
+          }}
           onReset={resetActivity}
         />
       );
