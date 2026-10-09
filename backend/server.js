@@ -5,9 +5,18 @@ const connectDB = require('./src/config/db');
 
 dotenv.config();
 
+process.on('uncaughtException', (err) => {
+  console.error('❌ Uncaught Exception:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
 connectDB();
 
 const app = express();
+
 
 app.use(cors({ origin: process.env.CLIENT_URL || '*' }));
 app.use(express.json());
@@ -79,18 +88,29 @@ app.use((req, res) => {
 const PORT = parseInt(process.env.PORT, 10) || 5000;
 const ALT_PORT = parseInt(process.env.ALT_PORT, 10) || 8082;
 
+function listen(port, label) {
+  const server = app.listen(port, '0.0.0.0', () => {
+    console.log(`✅ ${label} listening on http://0.0.0.0:${port}`);
+  });
+
+  server.on('error', (error) => {
+    if (error.code === 'EADDRINUSE') {
+      console.error(`❌ Port ${port} is already in use. ${label} could not start.`);
+      return;
+    }
+
+    console.error(`❌ Failed to start ${label} on port ${port}:`, error);
+  });
+}
+
 // Listen on primary port (0.0.0.0 for IPv4 network access)
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ UWell Backend running on http://0.0.0.0:${PORT}`);
-  console.log(`   Auth  → POST /api/auth/student/register`);
-  console.log(`          POST /api/auth/student/login`);
-  console.log(`   Student → GET/PUT /api/student/profile`);
-  console.log(`             GET     /api/student/:studentId`);
-});
+listen(PORT, 'UWell Backend');
+console.log(`   Auth  → POST /api/auth/student/register`);
+console.log(`          POST /api/auth/student/login`);
+console.log(`   Student → GET/PUT /api/student/profile`);
+console.log(`             GET     /api/student/:studentId`);
 
 // Listen on ALT_PORT (8082 is open in Windows Firewall 8081-8112 rule for mobile devices)
 if (ALT_PORT && ALT_PORT !== PORT) {
-  app.listen(ALT_PORT, '0.0.0.0', () => {
-    console.log(`✅ UWell Backend also listening on http://0.0.0.0:${ALT_PORT} (Firewall-friendly port)`);
-  });
+  listen(ALT_PORT, 'UWell Backend (Firewall-friendly port)');
 }
