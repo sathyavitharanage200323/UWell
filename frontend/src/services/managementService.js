@@ -1,58 +1,66 @@
 import api from './api';
 
+// Approval requests, dashboard stats and profile live in authService.
+// This service covers the appointment summary and usage reports.
 export const managementService = {
-  getProfile: async () => {
-    const response = await api.get('/management/profile');
+  // ── Appointment Summary ───────────────────────────────────────────────────
+  getAppointments: async (params = {}) => {
+    const response = await api.get('/management/appointments', { params });
     return response.data;
   },
 
-  updateProfile: async (profileData) => {
-    const response = await api.put('/management/profile', profileData);
+  updateAppointment: async (appointmentId, changes) => {
+    const response = await api.put(`/management/appointments/${appointmentId}`, changes);
     return response.data;
   },
 
-  getDashboardStats: async () => {
-    const response = await api.get('/management/dashboard');
+  // ── Usage Reports ─────────────────────────────────────────────────────────
+  generateUsageReport: async (type, range) => {
+    const response = await api.post('/management/usage-report', { type, range });
     return response.data;
   },
 
-  getAppointments: async () => {
-    const response = await api.get('/management/appointments');
+  saveUsageReport: async (type, range) => {
+    const response = await api.post('/management/reports', { type, range });
     return response.data;
   },
 
+  getSavedReports: async () => {
+    const response = await api.get('/management/reports');
+    return response.data;
+  },
+
+  deleteSavedReport: async (reportId) => {
+    const response = await api.delete(`/management/reports/${reportId}`);
+    return response.data;
+  },
+
+  // ── Usage Details & Service Notes ─────────────────────────────────────────
   getUsageDetails: async () => {
     const response = await api.get('/management/usage-details');
     return response.data;
   },
 
-  getUsageReport: async (filters) => {
-    const response = await api.post('/management/usage-report', filters);
+  addServiceNote: async (department, text) => {
+    const response = await api.post('/management/usage-details/notes', { department, text });
     return response.data;
   },
 
-  getUsers: async () => {
-    const response = await api.get('/management/users');
+  deleteServiceNote: async (noteId) => {
+    const response = await api.delete(`/management/usage-details/notes/${noteId}`);
     return response.data;
   },
 
-  updateUser: async (userId, userData) => {
-    const response = await api.put(`/management/users/${userId}`, userData);
+  // ── Privacy & Security ────────────────────────────────────────────────────
+  getSecurityInfo: async () => {
+    const response = await api.get('/management/security');
     return response.data;
   },
 
-  deleteUser: async (userId) => {
-    const response = await api.delete(`/management/users/${userId}`);
+  changePassword: async (currentPassword, newPassword) => {
+    const response = await api.put('/management/password', { currentPassword, newPassword });
     return response.data;
   },
-
-  getSystemSettings: async () => {
-    const response = await api.get('/management/settings');
-    return response.data;
-  },
-
-  updateSystemSettings: async (settings) => {
-    const response = await api.put('/management/settings', settings);
-    return response.data;
-  }
 };
+
+export default managementService;
