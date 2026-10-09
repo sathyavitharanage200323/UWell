@@ -29,14 +29,14 @@ const StudentsStackScreen = () => (
 
 const MessagesStackScreen = () => (
   <MessagesStack.Navigator screenOptions={{ headerShown: false }}>
-    <MessagesStack.Screen name="MessagesHome" component={MessagesScreen} />
+    <MessagesStack.Screen name="MessagesList" component={MessagesScreen} />
     <MessagesStack.Screen name="StudentChat" component={StudentChatScreen} />
   </MessagesStack.Navigator>
 );
 
 const ProfileStackScreen = () => (
   <ProfileStack.Navigator screenOptions={{ headerShown: false }}>
-    <ProfileStack.Screen name="ProfileHome" component={ProfileScreen} />
+    <ProfileStack.Screen name="ProfileMain" component={ProfileScreen} />
     <ProfileStack.Screen name="EditProfile" component={EditProfileScreen} />
     <ProfileStack.Screen name="ClinicalFocusAreas" component={ClinicalFocusAreasScreen} />
     <ProfileStack.Screen name="FocusAreaDetail" component={FocusAreaDetailScreen} />

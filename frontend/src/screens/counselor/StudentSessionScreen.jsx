@@ -33,8 +33,9 @@ const StudentSessionScreen = ({ route, navigation }) => {
 
   const handleSaveNotes = async () => {
     setIsSaving(true);
-    await counselorService.saveSessionNotes(studentId, sessionNotes);
+    const result = await counselorService.saveSessionNotes(studentId, sessionNotes);
     setIsSaving(false);
+    setStudent(prev => prev ? { ...prev, sessionNotesHistory: sessionNotes } : prev);
     Alert.alert('Saved', 'Private session notes saved successfully.');
   };
 

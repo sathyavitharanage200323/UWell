@@ -19,7 +19,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '../../theme';
-import Button from '../../components/common/Button';
 
 const { width } = Dimensions.get('window');
 
@@ -120,20 +119,6 @@ const FocusAreaDetailScreen = ({ route, navigation }) => {
 
     return () => floatAnim.stopAnimation();
   }, []);
-
-  const handleBook = () => {
-    Alert.alert(
-      'Book a Consultation',
-      `Request a session for ${area.key}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Request Session',
-          onPress: () => navigation.navigate('Appointments'),
-        },
-      ]
-    );
-  };
 
   const handleMessage = () => {
     navigation.navigate('Messages');
@@ -241,18 +226,6 @@ const FocusAreaDetailScreen = ({ route, navigation }) => {
       {/* ── Sticky bottom action bar ─────────────────────────── */}
       <View style={styles.bottomBar}>
         <View style={styles.bottomBarInner}>
-          {/* Primary — Book */}
-          <TouchableOpacity
-            style={[styles.bookBtn, { backgroundColor: area.accentColor }]}
-            onPress={handleBook}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel={`Book a consultation for ${area.key}`}
-          >
-            <Feather name="calendar" size={16} color={colors.white} style={{ marginRight: 8 }} />
-            <Text style={styles.bookBtnText}>Book a Consultation</Text>
-          </TouchableOpacity>
-
           {/* Secondary — Message */}
           <TouchableOpacity
             style={[styles.msgBtn, { borderColor: area.accentColor }]}

@@ -20,7 +20,9 @@ const StudentListScreen = ({ navigation }) => {
 
   useEffect(() => {
     loadStudents();
-  }, []);
+    const unsubscribe = navigation.addListener('focus', loadStudents);
+    return unsubscribe;
+  }, [navigation]);
 
   const loadStudents = async () => {
     const data = await counselorService.getStudents();
