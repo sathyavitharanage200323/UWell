@@ -12,15 +12,22 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { useAuth } from '../../context/AuthContext';
 
 export default function WellbeingRecommendation() {
   const navigation = useNavigation<any>();
+  const { login } = useAuth();
   const route = useRoute();
   const params = route.params as {
     email?: string; feeling?: string; stress?: string;
     sleep?: string; energy?: string; support?: string;
+    fromRegistration?: boolean;
+    registeredUser?: any;
+    registeredToken?: string;
   } || {};
-  const { email, feeling, stress, sleep, energy, support } = params;
+  const { email, feeling, stress, sleep, energy, support, fromRegistration, registeredUser, registeredToken } = params;
+
+  const isNewUser = !!fromRegistration;
 
   // ====================================
   // Animations
@@ -150,6 +157,19 @@ export default function WellbeingRecommendation() {
   }, []);
 
   // ====================================
+  // Auto-login after registration + wellbeing
+  // ====================================
+
+  const handleLoginAndNavigate = async () => {
+    if (registeredUser && registeredToken) {
+      await login({ ...registeredUser, token: registeredToken });
+      // AuthNavigator will automatically switch to StudentNavigator
+    } else {
+      navigation.navigate('Login');
+    }
+  };
+
+  // ====================================
   // Recommendation Logic
   // ====================================
 
@@ -240,11 +260,19 @@ export default function WellbeingRecommendation() {
       recommendation.action ===
       'Find a Counselor'
     ) {
-      navigation.getParent()?.navigate('Counselors');
+      if (isNewUser) {
+        handleLoginAndNavigate();
+      } else {
+        navigation.getParent()?.navigate('Counselors');
+      }
       return;
     }
 
-    navigation.getParent()?.navigate('Resources');
+    if (isNewUser) {
+      handleLoginAndNavigate();
+    } else {
+      navigation.getParent()?.navigate('Resources');
+    }
   };
 
   // ====================================
@@ -1024,7 +1052,10 @@ export default function WellbeingRecommendation() {
 
         <Pressable
           style={styles.secondaryButton}
-          onPress={() => navigation.getParent()?.navigate('Home')}
+          onPress={() => isNewUser
+            ? handleLoginAndNavigate()
+            : navigation.getParent()?.navigate('Home')
+          }
         >
           <Text
             style={styles.secondaryButtonText}

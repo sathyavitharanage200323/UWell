@@ -1,35 +1,62 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Pressable,
   ScrollView,
+  ActivityIndicator,
+  RefreshControl,
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
+import { studentService } from '../../services/studentService';
 
 export default function ProfileScreen() {
   const navigation = useNavigation<any>();
-  const { user, logout } = useAuth();
+  const { user, updateUser, logout } = useAuth();
+  const [refreshing, setRefreshing] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(true);
+
+  const loadProfile = useCallback(async () => {
+    try {
+      const res = await studentService.getProfile();
+      if (res?.data) {
+        await updateUser({
+          ...res.data,
+          token: user?.token,
+          role: user?.role ?? res.data.role,
+          fullName: res.data.fullName
+            || `${res.data.firstName || ''} ${res.data.lastName || ''}`.trim(),
+        });
+      }
+    } catch {
+      // keep cached user from auth storage
+    } finally {
+      setProfileLoading(false);
+      setRefreshing(false);
+    }
+  }, [updateUser, user?.token, user?.role]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadProfile();
+    }, [loadProfile]),
+  );
 
   const handleLogout = () => {
-    Alert.alert(
-      'Log Out',
-      'Are you sure you want to log out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Log Out',
-          style: 'destructive',
-          onPress: async () => {
-            if (logout) await logout();
-          },
+    Alert.alert('Log Out', 'Are you sure you want to log out?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Log Out',
+        style: 'destructive',
+        onPress: async () => {
+          if (logout) await logout();
         },
-      ]
-    );
+      },
+    ]);
   };
 
   const fullName = user?.fullName || (user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : 'Wasana');
@@ -45,7 +72,23 @@ export default function ProfileScreen() {
       <ScrollView
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              loadProfile();
+            }}
+            tintColor="#EF806B"
+          />
+        }
       >
+        {profileLoading && !refreshing && (
+          <View style={styles.profileLoadingRow}>
+            <ActivityIndicator size="small" color="#EF806B" />
+            <Text style={styles.profileLoadingText}>Syncing profile…</Text>
+          </View>
+        )}
         {/* Header */}
         <View style={styles.header}>
           <Pressable
@@ -288,6 +331,19 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 20,
     paddingBottom: 35,
+  },
+
+  profileLoadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 8,
+  },
+
+  profileLoadingText: {
+    fontSize: 12,
+    color: '#806E68',
   },
 
   header: {

@@ -8,46 +8,43 @@ export const authService = {
       const response = await api.post(endpoint, { email, password, role });
       return response.data;
     } catch (error) {
-      // If server responded (e.g. 403 Pending Approval or 401 Invalid Credentials), rethrow so UI displays it
       if (error.response?.data) {
         throw error;
       }
 
-      // Offline / Demo Fallback Mode (only when backend is completely offline)
-      let userData = {
-        id: 1,
-        email: email || 'e.martinez@university.edu',
-        role: role || 'counselor',
-        name: role === 'counselor' ? 'Dr. Evelyn Martinez' : 'Demo User',
-        firstName: role === 'counselor' ? 'Evelyn' : 'Demo',
-        lastName: role === 'counselor' ? 'Martinez' : 'User'
-      };
+      const userRole = role || 'student';
+      let userData;
 
-      if (role === 'counselor') {
+      if (userRole === 'counselor') {
         const counselor = mockUsers.counselors[0];
         userData = {
           ...counselor,
           name: `${counselor.firstName} ${counselor.lastName}`,
           role: 'counselor'
         };
-      } else if (role === 'student') {
+      } else if (userRole === 'student') {
         const student = mockUsers.students[0];
         userData = {
           ...student,
-          name: `${student.firstName} ${student.lastName}`
+          name: `${student.firstName} ${student.lastName}`,
+          role: 'student'
         };
-      } else if (role === 'welfare') {
+      } else if (userRole === 'welfare') {
         const welfare = mockUsers.welfare[0];
         userData = {
           ...welfare,
-          name: `${welfare.firstName} ${welfare.lastName}`
+          name: `${welfare.firstName} ${welfare.lastName}`,
+          role: 'welfare'
         };
-      } else if (role === 'management') {
-        const mgmt = mockUsers.management[0];
+      } else if (userRole === 'management') {
+        const management = mockUsers.management[0];
         userData = {
-          ...mgmt,
-          name: `${mgmt.firstName} ${mgmt.lastName}`
+          ...management,
+          name: `${management.firstName} ${management.lastName}`,
+          role: 'management'
         };
+      } else {
+        throw error;
       }
 
       return {
@@ -106,12 +103,8 @@ export const authService = {
   },
 
   logout: async () => {
-    try {
-      await api.post('/management/logout').catch(() => {});
-      return { success: true };
-    } catch (error) {
-      return { success: true };
-    }
+    // Authentication is JWT-based; clearing local credentials completes logout.
+    return { success: true };
   },
 
   refreshToken: async () => {

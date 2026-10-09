@@ -20,13 +20,40 @@ export const studentService = {
     return response.data;
   },
 
+  // ── Mood CRUD ─────────────────────────────────────────────────────────────
+  createMood: async (mood, notes = '') => {
+    const response = await api.post('/student/mood', { mood, notes });
+    return response.data;
+  },
+
+  getMoods: async () => {
+    const response = await api.get('/student/mood');
+    return response.data;
+  },
+
+  getMoodById: async (id) => {
+    const response = await api.get(`/student/mood/${id}`);
+    return response.data;
+  },
+
+  updateMood: async (id, mood, notes) => {
+    const response = await api.put(`/student/mood/${id}`, { mood, notes });
+    return response.data;
+  },
+
+  deleteMood: async (id) => {
+    const response = await api.delete(`/student/mood/${id}`);
+    return response.data;
+  },
+
+  // ── Legacy aliases (keep for compatibility) ───────────────────────────────
   submitMoodCheck: async (moodData) => {
-    const response = await api.post('/student/mood-check', moodData);
+    const response = await api.post('/student/mood', moodData);
     return response.data;
   },
 
   getMoodHistory: async () => {
-    const response = await api.get('/student/mood-history');
+    const response = await api.get('/student/mood');
     return response.data;
   },
 
@@ -50,6 +77,7 @@ export const studentService = {
     return response.data;
   },
 
+  // ── Appointment CRUD ──────────────────────────────────────────────────────
   bookAppointment: async (appointmentData) => {
     const response = await api.post('/student/appointments', appointmentData);
     return response.data;
@@ -65,13 +93,13 @@ export const studentService = {
     return response.data;
   },
 
-  cancelAppointment: async (appointmentId) => {
-    const response = await api.delete(`/student/appointments/${appointmentId}`);
+  updateAppointment: async (appointmentId, updateData) => {
+    const response = await api.put(`/student/appointments/${appointmentId}`, updateData);
     return response.data;
   },
 
-  rescheduleAppointment: async (appointmentId, newDateTime) => {
-    const response = await api.put(`/student/appointments/${appointmentId}/reschedule`, newDateTime);
+  cancelAppointment: async (appointmentId) => {
+    const response = await api.delete(`/student/appointments/${appointmentId}`);
     return response.data;
   },
 

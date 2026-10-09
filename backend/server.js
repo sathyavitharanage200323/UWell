@@ -62,9 +62,6 @@ app.post('/api/auth/login', (req, res, next) => {
 // Student Profile
 app.use('/api/student', require('./src/routes/student/studentRoutes'));
 
-// Welfare Officer Routes (Profile, Dashboard, Lookup by staffId)
-app.use('/api/welfare', require('./src/routes/welfare/welfareRoutes'));
-
 // ─── Global Error Handler ─────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
   console.error('❌ Unhandled error:', err);

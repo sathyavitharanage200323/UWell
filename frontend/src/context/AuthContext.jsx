@@ -17,8 +17,8 @@ export const AuthProvider = ({ children }) => {
     try {
       const storedUser = await AsyncStorage.getItem('user');
       if (storedUser) {
-        const userData = JSON.parse(storedUser);
-        setUser(userData);
+        const parsedUser = JSON.parse(storedUser);
+        setUser(parsedUser);
         setIsAuthenticated(true);
       }
     } catch (error) {
@@ -35,6 +35,9 @@ export const AuthProvider = ({ children }) => {
       await AsyncStorage.setItem('user', JSON.stringify(userData));
       if (userData.token) {
         await AsyncStorage.setItem('token', userData.token);
+        console.log('[Auth] Token saved:', userData.token.substring(0, 20) + '...');
+      } else {
+        console.warn('[Auth] No token in userData!');
       }
     } catch (error) {
       console.error('Error during login:', error);

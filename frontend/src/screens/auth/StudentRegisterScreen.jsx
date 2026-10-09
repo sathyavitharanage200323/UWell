@@ -135,12 +135,13 @@ export default function StudentRegisterScreen({ navigation }) {
         <SuccessView
           role="student"
           userData={registeredUser}
-          onContinue={async () => {
-            if (registeredUser) {
-              await login({ ...registeredUser, token: registeredToken });
-            } else {
-              navigation.navigate('Login');
-            }
+          onContinue={() => {
+            navigation.navigate('WellbeingCheck', {
+              email: registeredUser?.email || '',
+              fromRegistration: true,
+              registeredUser,
+              registeredToken,
+            });
           }}
           onLogin={() => navigation.navigate('Login')}
         />
