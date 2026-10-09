@@ -50,7 +50,13 @@ export default function ProfileScreen() {
         <View style={styles.header}>
           <Pressable
             style={styles.backButton}
-            onPress={() => navigation.goBack()}
+            onPress={() => {
+              if (navigation.canGoBack()) {
+                navigation.goBack();
+              } else {
+                navigation.getParent()?.navigate('Home');
+              }
+            }}
           >
             <Text style={styles.backText}>‹</Text>
           </Pressable>

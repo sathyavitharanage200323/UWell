@@ -77,12 +77,23 @@ exports.loginCounselor = async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) {
-      return res.status(400).json({ success: false, message: 'Email and password are required' });
+      return res.status(400).json({ success: false, message: 'Email/Staff ID and password are required' });
     }
 
-    const counselor = await Counselor.findOne({ email: email.trim().toLowerCase() }).select('+password');
+    const rawInput = (email || '').trim();
+    const emailLower = rawInput.toLowerCase();
+    const idUpper = rawInput.toUpperCase();
+
+    // Support login by email OR staffId
+    const counselor = await Counselor.findOne({
+      $or: [
+        { email: emailLower },
+        { staffId: idUpper },
+      ],
+    }).select('+password');
+
     if (!counselor) {
-      return res.status(401).json({ success: false, message: 'Invalid credentials' });
+      return res.status(401).json({ success: false, message: 'Invalid credentials. Please check your email or Staff ID.' });
     }
 
     // Check Manager Approval first: account cannot log in until manager approves
