@@ -178,8 +178,7 @@ const PrivacySecurityScreen = ({ navigation }) => {
           <Text style={styles.sectionTitle}>How your data is protected</Text>
           <Text style={styles.noteText}>
             Passwords are stored hashed, never as plain text. Management features require a signed-in
-            management account, and sessions expire automatically. Student mood and appointment
-            details are only shown in summary form on this account.
+            management account, and sessions expire automatically after 7 days.
           </Text>
         </Card>
       </View>
