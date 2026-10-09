@@ -7,7 +7,8 @@ import {
   TouchableOpacity,
   StatusBar,
   TextInput,
-  Alert
+  Alert,
+  Linking
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, typography } from '../../theme';
@@ -40,6 +41,22 @@ const StudentSessionScreen = ({ route, navigation }) => {
   };
 
   if (!student) return null;
+
+  const studentPhone = (student.phone || '').replace(/[^\d+]/g, '');
+  const hasPhone = studentPhone.length > 0;
+
+  const handleStartCall = () => {
+    if (!hasPhone) {
+      Alert.alert(
+        'No number on file',
+        'This student does not have a mobile number saved in their profile.'
+      );
+      return;
+    }
+    Linking.openURL(`tel:${studentPhone}`).catch(() =>
+      Alert.alert('Unable to start call', 'Your device could not open the phone dialer.')
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -85,11 +102,12 @@ const StudentSessionScreen = ({ route, navigation }) => {
         {/* Quick Action Buttons */}
         <View style={styles.actionButtonsRow}>
           <TouchableOpacity
-            style={[styles.primaryActionBtn, styles.videoBtn]}
-            onPress={() => navigation.navigate('VideoSession', { studentId: student.id, studentName: student.name })}
-            accessibilityLabel="Start Video Session"
+            style={[styles.primaryActionBtn, styles.videoBtn, !hasPhone && styles.disabledActionBtn]}
+            onPress={handleStartCall}
+            disabled={!hasPhone}
+            accessibilityLabel="Start Call Session"
           >
-            <Text style={styles.videoBtnText}>📹 Start Video Session</Text>
+            <Text style={[styles.videoBtnText, !hasPhone && styles.disabledActionBtnText]}>📞 Start Call Session</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -100,6 +118,12 @@ const StudentSessionScreen = ({ route, navigation }) => {
             <Text style={styles.messageBtnText}>💬 Message Student</Text>
           </TouchableOpacity>
         </View>
+
+        {!hasPhone && (
+          <Text style={styles.noPhoneText}>
+            No phone number on file for this student.
+          </Text>
+        )}
 
         {/* Weekly Mood History Chart */}
         <View style={styles.sectionHeader}>
@@ -258,6 +282,20 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: typography.fontSize.xs + 1,
     fontWeight: typography.fontWeight.bold
+  },
+  disabledActionBtn: {
+    backgroundColor: colors.border,
+    opacity: 0.7
+  },
+  disabledActionBtnText: {
+    color: colors.textSecondary
+  },
+  noPhoneText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.textSecondary,
+    fontStyle: 'italic',
+    marginTop: -spacing.xs,
+    marginBottom: spacing.md
   },
   messageBtn: {
     backgroundColor: colors.softCoral,
