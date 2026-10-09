@@ -443,9 +443,19 @@ const normaliseStatus = (status = '') => {
 
 const MANAGED_STATUSES = ['upcoming', 'completed', 'cancelled'];
 
+// Student bookings store a reference to the student, not their name, so the name
+// is looked up from the populated student record when it was not saved on the booking.
+const withStudent = (query) => query.populate('student', 'firstName lastName');
+
+const studentNameOf = (a) => {
+  if (a.studentName && a.studentName !== 'Student') return a.studentName;
+  if (a.student && a.student.firstName) return `${a.student.firstName} ${a.student.lastName || ''}`.trim();
+  return 'Student';
+};
+
 const formatAppointment = (a) => ({
   id: a._id,
-  studentName: a.studentName || 'Student',
+  studentName: studentNameOf(a),
   counselorName: a.counselorName,
   specialization: a.counselorSpecialization,
   date: a.date,
@@ -458,7 +468,7 @@ const formatAppointment = (a) => ({
 exports.getManagementAppointments = async (req, res) => {
   try {
     const { status, search } = req.query;
-    const all = (await Appointment.find().sort({ createdAt: -1 })).map(formatAppointment);
+    const all = (await withStudent(Appointment.find().sort({ createdAt: -1 }))).map(formatAppointment);
 
     const summary = { total: all.length, upcoming: 0, 'in session': 0, completed: 0, cancelled: 0 };
     all.forEach((a) => { summary[a.status] += 1; });
@@ -489,7 +499,7 @@ exports.updateManagementAppointment = async (req, res) => {
       return res.status(400).json({ success: false, message: `Status must be one of: ${MANAGED_STATUSES.join(', ')}` });
     }
 
-    const appointment = await Appointment.findById(req.params.id);
+    const appointment = await withStudent(Appointment.findById(req.params.id));
     if (!appointment) {
       return res.status(404).json({ success: false, message: 'Appointment not found' });
     }
@@ -539,7 +549,7 @@ const groupBy = (items, keyFn) => {
 
 const buildUsageReport = async (type, range) => {
   const since = rangeStart(range);
-  const appointments = (await Appointment.find({ createdAt: { $gte: since } })).map(formatAppointment);
+  const appointments = (await withStudent(Appointment.find({ createdAt: { $gte: since } }))).map(formatAppointment);
   const count = (list, st) => list.filter((a) => a.status === st).length;
 
   if (type === 'Appointments') {
@@ -671,7 +681,7 @@ exports.getUsageDetails = async (req, res) => {
   try {
     const monthStart = rangeStart('This Month');
     const [appointmentDocs, activeStudents, newStudents, counselors, welfare, notes] = await Promise.all([
-      Appointment.find(),
+      withStudent(Appointment.find()),
       Student.countDocuments({ isActive: true }),
       Student.countDocuments({ createdAt: { $gte: monthStart } }),
       Counselor.countDocuments({ approvalStatus: 'approved' }),
