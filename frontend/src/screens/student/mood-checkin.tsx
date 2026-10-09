@@ -9,8 +9,45 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { studentService } from '../../services/studentService';
+
+type MoodEntry = {
+  _id?: string;
+  mood: string;
+  notes?: string;
+  createdAt?: string;
+  date?: string;
+};
+
+function formatMoodDate(entry: MoodEntry) {
+  const raw = entry.createdAt || entry.date;
+  if (!raw) return '';
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+function moodEmoji(mood: string) {
+  switch (mood) {
+    case 'Very Good':
+      return '😄';
+    case 'Good':
+      return '🙂';
+    case 'Okay':
+      return '😐';
+    case 'Low':
+      return '😔';
+    case 'Very Low':
+      return '😢';
+    default:
+      return '💭';
+  }
+}
 
 const CORAL = '#EF806B';
 const CREAM = '#FFF9F3';
@@ -359,6 +396,8 @@ export default function MoodCheckInScreen() {
   const navigation = useNavigation<any>();
   const [selectedMood, setSelectedMood] =
     useState<string | null>(null);
+  const [moodHistory, setMoodHistory] = useState<MoodEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   const fadeAnim = useRef(
     new Animated.Value(0)
@@ -405,12 +444,31 @@ export default function MoodCheckInScreen() {
     ]).start();
   }, []);
 
+  const loadMoodHistory = async () => {
+    try {
+      setHistoryLoading(true);
+      const res = await studentService.getMoods();
+      setMoodHistory(res?.data || []);
+    } catch {
+      setMoodHistory([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  useFocusEffect(
+    React.useCallback(() => {
+      loadMoodHistory();
+    }, []),
+  );
+
   const handleContinue = async () => {
     if (!selectedMood) return;
 
     // Save to backend (non-blocking — navigate even if it fails)
     try {
       await studentService.createMood(selectedMood);
+      loadMoodHistory();
     } catch (e) {
       // silently fail — app works offline too
       console.log('[Mood] Backend save failed, continuing offline:', e?.message);
@@ -659,6 +717,33 @@ export default function MoodCheckInScreen() {
 
             </View>
 
+          </View>
+
+          {/* RECENT CHECK-INS */}
+          <View style={styles.historySection}>
+            <Text style={styles.historyTitle}>Recent Check-Ins</Text>
+            {historyLoading ? (
+              <Text style={styles.historyEmpty}>Loading your check-ins…</Text>
+            ) : moodHistory.length === 0 ? (
+              <Text style={styles.historyEmpty}>
+                No check-ins yet. Your mood history will appear here after your first entry.
+              </Text>
+            ) : (
+              moodHistory.slice(0, 10).map((entry) => (
+                <View key={entry._id || `${entry.mood}-${entry.createdAt}`} style={styles.historyRow}>
+                  <Text style={styles.historyEmoji}>{moodEmoji(entry.mood)}</Text>
+                  <View style={styles.historyContent}>
+                    <Text style={styles.historyMood}>{entry.mood}</Text>
+                    {!!entry.notes?.trim() && (
+                      <Text style={styles.historyNotes} numberOfLines={2}>
+                        {entry.notes}
+                      </Text>
+                    )}
+                  </View>
+                  <Text style={styles.historyDate}>{formatMoodDate(entry)}</Text>
+                </View>
+              ))
+            )}
           </View>
 
           {/* CONTINUE */}
@@ -1371,6 +1456,63 @@ const styles = StyleSheet.create({
   },
 
   /* ENCOURAGEMENT */
+
+  historySection: {
+    marginTop: 18,
+    backgroundColor: WHITE,
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+
+  historyTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: DARK,
+    marginBottom: 12,
+  },
+
+  historyEmpty: {
+    fontSize: 12.5,
+    lineHeight: 18,
+    color: MUTED,
+  },
+
+  historyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F1E8E3',
+  },
+
+  historyEmoji: {
+    fontSize: 22,
+    marginRight: 10,
+  },
+
+  historyContent: {
+    flex: 1,
+  },
+
+  historyMood: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: DARK,
+  },
+
+  historyNotes: {
+    fontSize: 11.5,
+    color: MUTED,
+    marginTop: 2,
+  },
+
+  historyDate: {
+    fontSize: 11,
+    color: MUTED,
+    marginLeft: 8,
+  },
 
   encouragement: {
     flexDirection: 'row',

@@ -148,17 +148,28 @@ const LoginScreen = ({ navigation }) => {
 
   const handleLogin = async () => {
     const newErrors = {};
-    if (!validateEmail(email))    newErrors.email    = 'Please enter a valid email';
+    const trimmedInput = (email || '').trim();
+    if (role === USER_ROLES.MANAGEMENT || role === USER_ROLES.WELFARE || role === USER_ROLES.COUNSELOR) {
+      if (!trimmedInput) {
+        newErrors.email = 'Please enter your work email or ID';
+      }
+    } else {
+      if (!validateEmail(trimmedInput)) newErrors.email = 'Please enter a valid email';
+    }
     if (!validatePassword(password)) newErrors.password = 'Password must be at least 6 characters';
     if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
 
     try {
       setLoading(true);
       setErrors({});
-      const response = await authService.login(email, password, role);
+      const response = await authService.login(trimmedInput, password, role);
       await login({ ...response.user, token: response.token });
     } catch (error) {
-      setErrors({ general: error.response?.data?.message || error.message || 'Login failed. Please try again.' });
+      const isPending = error.response?.data?.isPendingApproval;
+      setErrors({
+        general: error.response?.data?.message || error.message || 'Login failed. Please try again.',
+        isPendingApproval: !!isPending,
+      });
     } finally {
       setLoading(false);
     }
@@ -248,14 +259,24 @@ const LoginScreen = ({ navigation }) => {
 
           {/* ── Email field ───────────────────────────────────── */}
           <Animated.View style={{ opacity: fadeAnim }}>
-            <Text style={styles.fieldLabel}>Email</Text>
+            <Text style={styles.fieldLabel}>
+              {role === USER_ROLES.MANAGEMENT ? 'Email or Employee ID' : role === USER_ROLES.WELFARE ? 'Email or Staff ID' : 'Email'}
+            </Text>
             <View style={[styles.inputBox, errors.email && styles.inputBoxError]}>
               <Feather name="mail" size={18} color={errors.email ? colors.error : colors.textSecondary} style={styles.inputIcon} />
               <TextInput
                 style={styles.inputText}
                 value={email}
                 onChangeText={t => { setEmail(t); setErrors(e => ({ ...e, email: undefined })); }}
-                placeholder="Enter your email"
+                placeholder={
+                  role === USER_ROLES.MANAGEMENT
+                    ? 'e.g. hi@gmail.com or EMP1010'
+                    : role === USER_ROLES.WELFARE
+                    ? 'e.g. welfare@gmail.com or STF01'
+                    : role === USER_ROLES.COUNSELOR
+                    ? 'e.g. counselor@university.edu or CSL001'
+                    : 'Enter your email'
+                }
                 placeholderTextColor={colors.textMuted}
                 keyboardType="email-address"
                 autoCapitalize="none"
@@ -310,12 +331,25 @@ const LoginScreen = ({ navigation }) => {
               </TouchableOpacity>
             </View>
 
-            {/* General error */}
+            {/* General error or Pending Approval Banner */}
             {errors.general && (
-              <View style={styles.generalErrorBox}>
-                <Feather name="alert-circle" size={14} color={colors.statusRedText} />
-                <Text style={styles.generalErrorText}>{errors.general}</Text>
-              </View>
+              errors.isPendingApproval ? (
+                <View style={styles.pendingBox}>
+                  <View style={styles.pendingHeaderRow}>
+                    <Feather name="clock" size={16} color="#B45309" />
+                    <Text style={styles.pendingTitle}>Account Pending Approval</Text>
+                  </View>
+                  <Text style={styles.pendingMessage}>{errors.general}</Text>
+                  <Text style={styles.pendingSubtext}>
+                    A university manager must approve your registration from the Management Dashboard before you can sign in.
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.generalErrorBox}>
+                  <Feather name="alert-circle" size={14} color={colors.statusRedText} />
+                  <Text style={styles.generalErrorText}>{errors.general}</Text>
+                </View>
+              )
             )}
 
             {/* ── Login button ──────────────────────────────── */}
@@ -696,6 +730,36 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.statusRedText,
     flex: 1,
+  },
+  pendingBox: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: spacing.md,
+  },
+  pendingHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  pendingTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#92400E',
+  },
+  pendingMessage: {
+    fontSize: 12,
+    color: '#78350F',
+    lineHeight: 17,
+  },
+  pendingSubtext: {
+    fontSize: 11,
+    color: '#B45309',
+    marginTop: 6,
+    fontStyle: 'italic',
   },
 
   // ── Login button ─────────────────────────────────────────────

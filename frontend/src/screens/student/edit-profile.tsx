@@ -14,36 +14,144 @@ import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import { studentService } from '../../services/studentService';
 
+const CORAL  = '#EF806B';
+const CREAM  = '#FFF9F3';
+const DARK   = '#4A3833';
+const MUTED  = '#806F68';
+const WHITE  = '#FFFFFF';
+const BORDER = '#E9DDD7';
+
+/* ─────────────────────────────────────────────────────────
+   REUSABLE FORM FIELD
+───────────────────────────────────────────────────────── */
+const Field = ({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  keyboardType = 'default',
+  autoCapitalize = 'words',
+  editable = true,
+  helperText = '',
+  required = false,
+}: {
+  label: string;
+  value: string;
+  onChangeText?: (v: string) => void;
+  placeholder?: string;
+  keyboardType?: any;
+  autoCapitalize?: any;
+  editable?: boolean;
+  helperText?: string;
+  required?: boolean;
+}) => (
+  <View style={fieldStyles.wrap}>
+    <Text style={fieldStyles.label}>
+      {label}
+      {required && <Text style={fieldStyles.required}> *</Text>}
+    </Text>
+    <TextInput
+      value={value}
+      onChangeText={onChangeText}
+      placeholder={placeholder}
+      placeholderTextColor="#B5A49E"
+      keyboardType={keyboardType}
+      autoCapitalize={autoCapitalize}
+      editable={editable}
+      style={[
+        fieldStyles.input,
+        !editable && fieldStyles.inputReadOnly,
+      ]}
+    />
+    {!!helperText && (
+      <Text style={fieldStyles.helper}>{helperText}</Text>
+    )}
+  </View>
+);
+
+const fieldStyles = StyleSheet.create({
+  wrap:          { marginBottom: 18 },
+  label:         { fontSize: 12.5, fontWeight: '700', color: DARK, marginBottom: 7 },
+  required:      { color: CORAL },
+  input: {
+    height: 48, borderWidth: 1, borderColor: BORDER,
+    borderRadius: 13, paddingHorizontal: 14,
+    backgroundColor: WHITE, fontSize: 13, color: DARK,
+  },
+  inputReadOnly: { backgroundColor: '#F7F3EF', color: MUTED },
+  helper:        { fontSize: 10, color: '#95847E', marginTop: 5 },
+});
+
+/* ─────────────────────────────────────────────────────────
+   SECTION CARD
+───────────────────────────────────────────────────────── */
+const Section = ({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}) => (
+  <View style={sectionStyles.wrap}>
+    <View style={sectionStyles.header}>
+      <Text style={sectionStyles.title}>{title}</Text>
+      {!!subtitle && (
+        <Text style={sectionStyles.subtitle}>{subtitle}</Text>
+      )}
+    </View>
+    <View style={sectionStyles.card}>{children}</View>
+  </View>
+);
+
+const sectionStyles = StyleSheet.create({
+  wrap:     { marginBottom: 22 },
+  header:   { marginBottom: 10 },
+  title:    { fontSize: 16, fontWeight: '700', color: DARK },
+  subtitle: { fontSize: 11.5, color: MUTED, marginTop: 2 },
+  card: {
+    backgroundColor: WHITE, borderRadius: 18, padding: 18,
+    borderWidth: 1, borderColor: '#F0E4DE',
+    shadowColor: '#C6AEA1', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05, shadowRadius: 8, elevation: 1,
+  },
+});
+
+/* ─────────────────────────────────────────────────────────
+   MAIN SCREEN
+───────────────────────────────────────────────────────── */
 export default function EditProfileScreen() {
-  const navigation = useNavigation<any>();
+  const navigation  = useNavigation<any>();
   const { user, updateUser } = useAuth();
 
+  // Editable fields
   const [firstName, setFirstName] = useState(user?.firstName || '');
-  const [lastName, setLastName]   = useState(user?.lastName  || '');
-  const [phone, setPhone]         = useState(user?.phone     || '');
-  const [loading, setLoading]     = useState(false);
+  const [lastName,  setLastName]  = useState(user?.lastName  || '');
+  const [phone,     setPhone]     = useState(user?.phone     || '');
 
+  const [loading, setLoading] = useState(false);
+
+  /* ── Save ── */
   const handleSave = async () => {
     if (!firstName.trim()) {
-      Alert.alert('Missing Information', 'Please enter your first name.');
+      Alert.alert('Required', 'First name cannot be empty.');
       return;
     }
     if (!lastName.trim()) {
-      Alert.alert('Missing Information', 'Please enter your last name.');
+      Alert.alert('Required', 'Last name cannot be empty.');
       return;
     }
 
     try {
       setLoading(true);
 
-      // PUT /api/student/profile — update backend
       const res = await studentService.updateProfile({
         firstName: firstName.trim(),
         lastName:  lastName.trim(),
         phone:     phone.trim(),
       });
 
-      // Update local AuthContext so UI reflects immediately
       if (res?.data) {
         await updateUser({
           ...res.data,
@@ -52,14 +160,14 @@ export default function EditProfileScreen() {
       }
 
       Alert.alert(
-        'Profile Updated ✓',
-        'Your personal information has been updated successfully.',
+        'Profile Updated',
+        'Your information has been saved successfully.',
         [{ text: 'OK', onPress: () => navigation.goBack() }],
       );
-    } catch (error: any) {
+    } catch (err: any) {
       const msg =
-        error?.response?.data?.message ||
-        error?.message ||
+        err?.response?.data?.message ||
+        err?.message ||
         'Failed to update profile. Please try again.';
       Alert.alert('Update Failed', msg);
     } finally {
@@ -67,6 +175,7 @@ export default function EditProfileScreen() {
     }
   };
 
+  /* ── UI ── */
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
@@ -74,136 +183,125 @@ export default function EditProfileScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Header */}
+
+        {/* ── Header ── */}
         <View style={styles.header}>
-          <Pressable style={styles.backButton} onPress={() => navigation.goBack()}>
-            <Text style={styles.backText}>‹</Text>
+          <Pressable style={styles.backBtn} onPress={() => navigation.goBack()}>
+            <Text style={styles.backArrow}>‹</Text>
           </Pressable>
           <Text style={styles.headerTitle}>Edit Profile</Text>
           <View style={styles.headerSpacer} />
         </View>
 
-        {/* Profile Avatar */}
-        <View style={styles.profileCard}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>👤</Text>
-          </View>
-          <Text style={styles.profileName}>Update Your Profile</Text>
-          <Text style={styles.profileSubtitle}>
-            Keep your personal information up to date
+        {/* ── Page intro ── */}
+        <View style={styles.introBlock}>
+          <Text style={styles.introSmall}>ACCOUNT SETTINGS</Text>
+          <Text style={styles.introTitle}>Update Your Profile</Text>
+          <Text style={styles.introSub}>
+            Edit your personal details below. Fields marked with{' '}
+            <Text style={{ color: CORAL }}>*</Text> are required.
           </Text>
         </View>
 
-        {/* Form */}
-        <Text style={styles.sectionTitle}>Personal Information</Text>
+        {/* ── Personal Information ── */}
+        <Section
+          title="Personal Information"
+          subtitle="Your full legal name as registered"
+        >
+          <Field
+            label="First Name"
+            required
+            value={firstName}
+            onChangeText={setFirstName}
+            placeholder="e.g. Sarah"
+            autoCapitalize="words"
+          />
+          <Field
+            label="Last Name"
+            required
+            value={lastName}
+            onChangeText={setLastName}
+            placeholder="e.g. Fernando"
+            autoCapitalize="words"
+          />
+        </Section>
 
-        <View style={styles.formCard}>
+        {/* ── Academic Information ── */}
+        <Section
+          title="Academic Information"
+          subtitle="Your university enrollment details (read-only)"
+        >
+          <Field
+            label="Student ID"
+            value={user?.studentId || '—'}
+            editable={false}
+            helperText="Student ID cannot be changed."
+          />
+          <Field
+            label="Faculty"
+            value={user?.faculty || '—'}
+            editable={false}
+          />
+          <Field
+            label="Degree Program"
+            value={user?.degreeProgram || '—'}
+            editable={false}
+          />
+          <Field
+            label="Year of Study"
+            value={user?.yearOfStudy || '—'}
+            editable={false}
+          />
+        </Section>
 
-          {/* First Name */}
-          <View style={styles.fieldContainer}>
-            <Text style={styles.label}>First Name *</Text>
-            <TextInput
-              value={firstName}
-              onChangeText={setFirstName}
-              placeholder="Enter your first name"
-              placeholderTextColor="#B5A49E"
-              style={styles.input}
-            />
-          </View>
+        {/* ── Contact Information ── */}
+        <Section
+          title="Contact Information"
+          subtitle="How we can reach you"
+        >
+          <Field
+            label="University Email"
+            value={user?.email || '—'}
+            editable={false}
+            helperText="Email address cannot be changed."
+          />
+          <Field
+            label="Phone Number"
+            value={phone}
+            onChangeText={setPhone}
+            placeholder="e.g. +94 77 123 4567"
+            keyboardType="phone-pad"
+            autoCapitalize="none"
+          />
+        </Section>
 
-          {/* Last Name */}
-          <View style={styles.fieldContainer}>
-            <Text style={styles.label}>Last Name *</Text>
-            <TextInput
-              value={lastName}
-              onChangeText={setLastName}
-              placeholder="Enter your last name"
-              placeholderTextColor="#B5A49E"
-              style={styles.input}
-            />
-          </View>
-
-          {/* Email — read only */}
-          <View style={styles.fieldContainer}>
-            <Text style={styles.label}>University Email</Text>
-            <View style={styles.readOnlyInput}>
-              <Text style={styles.readOnlyText}>
-                {user?.email || 'student@university.edu'}
-              </Text>
-            </View>
-            <Text style={styles.helperText}>Email cannot be changed.</Text>
-          </View>
-
-          {/* Student ID — read only */}
-          <View style={styles.fieldContainer}>
-            <Text style={styles.label}>Student ID</Text>
-            <View style={styles.readOnlyInput}>
-              <Text style={styles.readOnlyText}>
-                {user?.studentId || 'N/A'}
-              </Text>
-            </View>
-            <Text style={styles.helperText}>Student ID cannot be changed.</Text>
-          </View>
-
-          {/* Phone */}
-          <View style={styles.fieldContainer}>
-            <Text style={styles.label}>Phone Number</Text>
-            <TextInput
-              value={phone}
-              onChangeText={setPhone}
-              placeholder="Enter your phone number"
-              placeholderTextColor="#B5A49E"
-              keyboardType="phone-pad"
-              style={styles.input}
-            />
-          </View>
-
-          {/* Role — read only */}
-          <View style={styles.fieldContainer}>
-            <Text style={styles.label}>Role</Text>
-            <View style={styles.readOnlyInput}>
-              <Text style={styles.readOnlyText}>University Student</Text>
-            </View>
-            <Text style={styles.helperText}>
-              Your role cannot be changed from your profile.
-            </Text>
-          </View>
-
-        </View>
-
-        {/* Privacy Notice */}
+        {/* ── Privacy notice ── */}
         <View style={styles.privacyCard}>
-          <View style={styles.privacyIconBox}>
-            <Text style={styles.privacyIcon}>🔒</Text>
-          </View>
-          <View style={styles.privacyContent}>
-            <Text style={styles.privacyTitle}>Your Privacy Matters</Text>
-            <Text style={styles.privacyText}>
-              Your personal information is kept private and protected within UWell.
-            </Text>
-          </View>
+          <Text style={styles.privacyTitle}>Privacy & Data</Text>
+          <Text style={styles.privacyText}>
+            Your personal information is stored securely and handled in
+            accordance with the UWell privacy policy.
+          </Text>
         </View>
 
-        {/* Save Button */}
+        {/* ── Buttons ── */}
         <Pressable
-          style={[styles.saveButton, loading && styles.saveButtonDisabled]}
+          style={[styles.saveBtn, loading && styles.saveBtnDisabled]}
           onPress={handleSave}
           disabled={loading}
         >
-          {loading ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <Text style={styles.saveButtonText}>Save Changes</Text>
-          )}
+          {loading
+            ? <ActivityIndicator color={WHITE} />
+            : <Text style={styles.saveBtnText}>Save Changes</Text>
+          }
         </Pressable>
 
-        {/* Cancel */}
         <Pressable
-          style={styles.cancelButton}
+          style={styles.cancelBtn}
           onPress={() => navigation.goBack()}
           disabled={loading}
         >
-          <Text style={styles.cancelButtonText}>Cancel</Text>
+          <Text style={styles.cancelBtnText}>Cancel</Text>
         </Pressable>
 
       </ScrollView>
@@ -211,82 +309,61 @@ export default function EditProfileScreen() {
   );
 }
 
+/* ─────────────────────────────────────────────────────────
+   STYLES
+───────────────────────────────────────────────────────── */
 const styles = StyleSheet.create({
-  safeArea:  { flex: 1, backgroundColor: '#FFF9F3' },
-  container: { paddingHorizontal: 20, paddingBottom: 35 },
+  safeArea:  { flex: 1, backgroundColor: CREAM },
+  container: { paddingHorizontal: 22, paddingBottom: 40 },
 
+  // Header
   header: {
-    height: 60, flexDirection: 'row',
+    height: 58, flexDirection: 'row',
     alignItems: 'center', justifyContent: 'space-between',
   },
-  backButton: {
-    width: 42, height: 42, borderRadius: 21,
-    backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center',
+  backBtn: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: WHITE, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: '#F0E4DE',
   },
-  backText:     { fontSize: 32, color: '#3B2925', marginTop: -4 },
-  headerTitle:  { fontSize: 18, fontWeight: '700', color: '#3B2925' },
-  headerSpacer: { width: 42 },
+  backArrow:    { fontSize: 28, color: MUTED, fontWeight: '400', marginTop: -2 },
+  headerTitle:  { fontSize: 17, fontWeight: '700', color: DARK },
+  headerSpacer: { width: 40 },
 
-  profileCard: {
-    backgroundColor: '#FFFFFF', borderRadius: 22, padding: 22,
-    alignItems: 'center', marginTop: 15, marginBottom: 25,
-    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
+  // Intro
+  introBlock: { marginTop: 4, marginBottom: 24 },
+  introSmall: {
+    fontSize: 10, fontWeight: '700', color: CORAL,
+    letterSpacing: 1.2, marginBottom: 5,
   },
-  avatar: {
-    width: 76, height: 76, borderRadius: 38,
-    backgroundColor: '#FFF1EC', alignItems: 'center', justifyContent: 'center',
-    marginBottom: 10,
-  },
-  avatarText:      { fontSize: 37 },
-  profileName:     { fontSize: 18, fontWeight: '800', color: '#3B2925' },
-  profileSubtitle: { fontSize: 12, color: '#806F69', textAlign: 'center', marginTop: 5 },
+  introTitle: { fontSize: 26, fontWeight: '800', color: DARK, lineHeight: 32 },
+  introSub:   { fontSize: 12.5, color: MUTED, lineHeight: 18, marginTop: 6 },
 
-  sectionTitle: { fontSize: 17, fontWeight: '700', color: '#3B2925', marginBottom: 11 },
-
-  formCard: {
-    backgroundColor: '#FFFFFF', borderRadius: 20, padding: 18,
-    shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 7, elevation: 2,
-  },
-  fieldContainer: { marginBottom: 17 },
-  label:          { fontSize: 12, fontWeight: '700', color: '#3B2925', marginBottom: 7 },
-  input: {
-    height: 48, borderWidth: 1, borderColor: '#E9DDD7',
-    borderRadius: 13, paddingHorizontal: 14,
-    backgroundColor: '#FFFDFC', fontSize: 13, color: '#3B2925',
-  },
-  readOnlyInput: {
-    height: 48, borderWidth: 1, borderColor: '#E9DDD7',
-    borderRadius: 13, paddingHorizontal: 14,
-    backgroundColor: '#F7F3EF', justifyContent: 'center',
-  },
-  readOnlyText: { fontSize: 13, color: '#806F69' },
-  helperText:   { fontSize: 10, color: '#95847E', marginTop: 5 },
-
+  // Privacy
   privacyCard: {
-    flexDirection: 'row', alignItems: 'flex-start',
-    backgroundColor: '#F7F3EF', borderRadius: 18, padding: 16, marginTop: 20,
+    backgroundColor: '#F7F3EF', borderRadius: 16,
+    padding: 15, marginBottom: 22,
+    borderWidth: 1, borderColor: '#EFE5DE',
   },
-  privacyIconBox: {
-    width: 40, height: 40, borderRadius: 12,
-    backgroundColor: '#FFFFFF', alignItems: 'center',
-    justifyContent: 'center', marginRight: 11,
-  },
-  privacyIcon:    { fontSize: 20 },
-  privacyContent: { flex: 1 },
-  privacyTitle:   { fontSize: 14, fontWeight: '700', color: '#3B2925', marginBottom: 4 },
-  privacyText:    { fontSize: 11, lineHeight: 17, color: '#806F69' },
+  privacyTitle: { fontSize: 13, fontWeight: '700', color: DARK, marginBottom: 5 },
+  privacyText:  { fontSize: 11.5, color: MUTED, lineHeight: 17 },
 
-  saveButton: {
-    height: 52, backgroundColor: '#F47F69', borderRadius: 18,
-    alignItems: 'center', justifyContent: 'center', marginTop: 20,
+  // Save button
+  saveBtn: {
+    height: 52, backgroundColor: CORAL, borderRadius: 17,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: CORAL, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18, shadowRadius: 8, elevation: 3,
   },
-  saveButtonDisabled: { backgroundColor: '#D4B3AB' },
-  saveButtonText:     { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
+  saveBtnDisabled: { backgroundColor: '#D4B3AB', shadowOpacity: 0, elevation: 0 },
+  saveBtnText:     { fontSize: 15, fontWeight: '700', color: WHITE },
 
-  cancelButton: {
-    height: 50, backgroundColor: '#FFFFFF', borderWidth: 1,
-    borderColor: '#E9DDD7', borderRadius: 18,
-    alignItems: 'center', justifyContent: 'center', marginTop: 10,
+  // Cancel button
+  cancelBtn: {
+    height: 48, backgroundColor: WHITE,
+    borderWidth: 1, borderColor: BORDER,
+    borderRadius: 17, alignItems: 'center',
+    justifyContent: 'center', marginTop: 10,
   },
-  cancelButtonText: { fontSize: 14, fontWeight: '700', color: '#806F69' },
+  cancelBtnText: { fontSize: 14, fontWeight: '600', color: MUTED },
 });

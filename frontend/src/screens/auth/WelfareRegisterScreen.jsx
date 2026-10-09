@@ -27,6 +27,7 @@ export default function WelfareRegisterScreen({ navigation }) {
   const [showPw, setShowPw]   = useState(false);
   const [showCPw, setShowCPw] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [registeredData, setRegisteredData] = useState(null);
 
   const set  = (k, v) => { setF(p => ({ ...p, [k]: v })); if (errs[k]) setErrs(p => ({ ...p, [k]: null })); };
   const blur = (k)    => { setTouched(p => ({ ...p, [k]: true })); validateField(k, f[k]); };
@@ -61,20 +62,38 @@ export default function WelfareRegisterScreen({ navigation }) {
     if (!validate()) return;
     try {
       setLoading(true);
-      await authService.register({
-        firstName: f.firstName.trim(), lastName: f.lastName.trim(),
-        staffId: f.staffId.trim(), department: f.department,
-        position: f.position, email: f.workEmail.trim(),
-        phone: f.phone.trim(), officeLocation: f.officeLocation.trim(),
-        password: f.password, role: 'welfare',
-      });
+      const payload = {
+        firstName: f.firstName.trim(),
+        lastName: f.lastName.trim(),
+        staffId: f.staffId.trim().toUpperCase(),
+        department: f.department,
+        position: f.position,
+        email: f.workEmail.trim().toLowerCase(),
+        phone: f.phone.trim(),
+        officeLocation: f.officeLocation.trim(),
+        password: f.password,
+        role: 'welfare',
+      };
+      const res = await authService.register(payload);
+      setRegisteredData(res.user || payload);
       setSuccess(true);
     } catch (e) {
-      setErrs(p => ({ ...p, general: e.message || 'Registration failed.' }));
+      setErrs(p => ({ ...p, general: e.response?.data?.message || e.message || 'Registration failed.' }));
     } finally { setLoading(false); }
   };
 
-  if (success) return <SafeAreaView style={sharedStyles.safe}><SuccessView role="welfare staff" onLogin={() => navigation.navigate('Login')} /></SafeAreaView>;
+  if (success) {
+    return (
+      <SafeAreaView style={sharedStyles.safe}>
+        <SuccessView
+          role="welfare officer"
+          userData={registeredData}
+          isPendingApproval={true}
+          onLogin={() => navigation.navigate('Login')}
+        />
+      </SafeAreaView>
+    );
+  }
   const isOk = k => touched[k] && !errs[k] && f[k]?.trim?.();
 
   return (

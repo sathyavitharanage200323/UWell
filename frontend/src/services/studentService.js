@@ -77,6 +77,7 @@ export const studentService = {
     return response.data;
   },
 
+  // ── Appointment CRUD ──────────────────────────────────────────────────────
   bookAppointment: async (appointmentData) => {
     const response = await api.post('/student/appointments', appointmentData);
     return response.data;
@@ -92,13 +93,13 @@ export const studentService = {
     return response.data;
   },
 
-  cancelAppointment: async (appointmentId) => {
-    const response = await api.delete(`/student/appointments/${appointmentId}`);
+  updateAppointment: async (appointmentId, updateData) => {
+    const response = await api.put(`/student/appointments/${appointmentId}`, updateData);
     return response.data;
   },
 
-  rescheduleAppointment: async (appointmentId, newDateTime) => {
-    const response = await api.put(`/student/appointments/${appointmentId}/reschedule`, newDateTime);
+  cancelAppointment: async (appointmentId) => {
+    const response = await api.delete(`/student/appointments/${appointmentId}`);
     return response.data;
   },
 

@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from './AuthContext';
+import { welfareService } from '../services/welfareService';
 import {
   welfareAppointments as initialAppointments,
   welfareNotifications as initialNotifications,
@@ -17,28 +19,105 @@ const STORAGE_KEYS = {
 const WelfareContext = createContext(null);
 
 export const WelfareProvider = ({ children }) => {
+  const { user: authUser } = useAuth();
   const [appointments, setAppointments] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [profile, setProfile] = useState(null);
   const [privacy, setPrivacy] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Build a profile object from the real logged-in welfare user
+  const buildProfileFromAuth = (u) => ({
+    id: u._id || u.id || 'wo-live',
+    name: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.name || 'Welfare Officer',
+    firstName: u.firstName || '',
+    lastName: u.lastName || '',
+    role: u.position || 'Welfare Officer',
+    department: u.department || 'Student Welfare Services',
+    position: u.position || 'Welfare Officer',
+    email: u.email || '',
+    phone: u.phone || '',
+    officeLocation: u.officeLocation || '',
+    staffId: u.staffId || '',
+    approvalStatus: u.approvalStatus || (u.isApproved ? 'approved' : 'pending'),
+    isApproved: !!u.isApproved,
+    approvedBy: u.approvedBy || 'Management Admin',
+    approvedAt: u.approvedAt || null,
+    bio: u.bio || 'Dedicated to supporting university student wellbeing, mental health initiatives, and student advocacy.',
+    specializations: Array.isArray(u.specializations) && u.specializations.length > 0
+      ? u.specializations
+      : ['Student Wellbeing', 'Financial Aid Guidance', 'Housing Support', 'Crisis Intervention'],
+    officeHours: u.officeHours || 'Monday – Friday, 8:30 AM – 4:30 PM',
+    qualifications: u.qualifications || 'BSc in Social Work / Student Counseling',
+    yearsOfExperience: u.yearsOfExperience || '3+ Years',
+    languages: Array.isArray(u.languages) && u.languages.length > 0 ? u.languages : ['English', 'Sinhala'],
+    emergencyContactPhone: u.emergencyContactPhone || '',
+    workingSchedule: u.workingSchedule || 'Full-time On Campus',
+    availabilityStatus: u.availabilityStatus || 'Available Today',
+    workingDays: Array.isArray(u.workingDays) && u.workingDays.length > 0
+      ? u.workingDays
+      : ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+    consultationMode: u.consultationMode || 'In-Person & Online',
+    emergencyAvailable: u.emergencyAvailable !== undefined ? !!u.emergencyAvailable : true,
+    availabilityNote: u.availabilityNote || '',
+    avatarInitials: `${(u.firstName || 'W')[0] || 'W'}${(u.lastName || 'O')[0] || 'O'}`.toUpperCase(),
+  });
+
   useEffect(() => {
     loadAllData();
   }, []);
 
+  // When authUser changes (e.g. after login), update the profile with real data and fetch latest from backend
+  useEffect(() => {
+    if (authUser && (authUser.role === 'welfare' || authUser.staffId)) {
+      const realProfile = buildProfileFromAuth(authUser);
+      setProfile(realProfile);
+      AsyncStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(realProfile)).catch(() => {});
+
+      // Fetch fresh profile from backend if online
+      welfareService.getProfile()
+        .then((res) => {
+          if (res?.user) {
+            const synced = buildProfileFromAuth(res.user);
+            setProfile(synced);
+            AsyncStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(synced)).catch(() => {});
+          }
+        })
+        .catch(() => {});
+    }
+  }, [authUser]);
+
   const loadAllData = async () => {
     try {
-      const [aptData, notifData, profileData, privacyData] = await Promise.all([
-        AsyncStorage.getItem(STORAGE_KEYS.APPOINTMENTS),
+      const [notifData, profileData, privacyData] = await Promise.all([
         AsyncStorage.getItem(STORAGE_KEYS.NOTIFICATIONS),
         AsyncStorage.getItem(STORAGE_KEYS.PROFILE),
         AsyncStorage.getItem(STORAGE_KEYS.PRIVACY)
       ]);
 
-      const apt = aptData ? JSON.parse(aptData) : initialAppointments;
+      // Appointments: always try backend first
+      let apt = initialAppointments;
+      try {
+        const aptRes = await welfareService.getAppointments();
+        if (aptRes?.appointments?.length > 0) {
+          apt = aptRes.appointments;
+          await AsyncStorage.setItem(STORAGE_KEYS.APPOINTMENTS, JSON.stringify(apt));
+        } else {
+          const cached = await AsyncStorage.getItem(STORAGE_KEYS.APPOINTMENTS);
+          apt = cached ? JSON.parse(cached) : initialAppointments;
+        }
+      } catch {
+        const cached = await AsyncStorage.getItem(STORAGE_KEYS.APPOINTMENTS);
+        apt = cached ? JSON.parse(cached) : initialAppointments;
+      }
+
       const notif = notifData ? JSON.parse(notifData) : initialNotifications;
-      const prof = profileData ? JSON.parse(profileData) : initialOfficer;
+      let prof;
+      if (authUser && (authUser.role === 'welfare' || authUser.staffId)) {
+        prof = buildProfileFromAuth(authUser);
+      } else {
+        prof = profileData ? JSON.parse(profileData) : initialOfficer;
+      }
       const priv = privacyData ? JSON.parse(privacyData) : initialPrivacy;
 
       setAppointments(apt);
@@ -46,7 +125,6 @@ export const WelfareProvider = ({ children }) => {
       setProfile(prof);
       setPrivacy(priv);
 
-      if (!aptData) await AsyncStorage.setItem(STORAGE_KEYS.APPOINTMENTS, JSON.stringify(initialAppointments));
       if (!notifData) await AsyncStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(initialNotifications));
       if (!profileData) await AsyncStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(initialOfficer));
       if (!privacyData) await AsyncStorage.setItem(STORAGE_KEYS.PRIVACY, JSON.stringify(initialPrivacy));
@@ -57,33 +135,55 @@ export const WelfareProvider = ({ children }) => {
     }
   };
 
+  // Refresh appointments from backend (can be called manually)
+  const refreshAppointments = async () => {
+    try {
+      const aptRes = await welfareService.getAppointments();
+      if (aptRes?.appointments) {
+        setAppointments(aptRes.appointments);
+        await AsyncStorage.setItem(STORAGE_KEYS.APPOINTMENTS, JSON.stringify(aptRes.appointments));
+      }
+    } catch (error) {
+      console.error('refreshAppointments error:', error);
+    }
+  };
+
   // ----- APPOINTMENTS: READ -----
   const getAppointments = (filter = 'All') => {
     if (filter === 'All') return appointments;
-    return appointments.filter((a) => a.status === filter);
+    // Normalise status comparison (backend uses lowercase 'upcoming', 'cancelled', etc.)
+    return appointments.filter((a) => {
+      const s = (a.status || '').toLowerCase();
+      const f = filter.toLowerCase();
+      return s === f;
+    });
   };
 
-  const getAppointmentById = (id) => appointments.find((a) => a.id === id);
+  const getAppointmentById = (id) => appointments.find((a) => a.id === id || a._id === id);
 
-  // ----- APPOINTMENTS: UPDATE -----
+  // ----- APPOINTMENTS: UPDATE (backend + local) -----
   const updateAppointment = async (id, changes) => {
-    const updated = appointments.map((a) => (a.id === id ? { ...a, ...changes } : a));
+    // Optimistic local update
+    const updated = appointments.map((a) => (a.id === id || a._id === id ? { ...a, ...changes } : a));
     setAppointments(updated);
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.APPOINTMENTS, JSON.stringify(updated));
+      // Sync to backend
+      await welfareService.updateAppointment(id, changes);
     } catch (error) {
       console.error('updateAppointment error:', error);
     }
   };
 
-  // ----- APPOINTMENTS: DELETE (soft — status becomes Cancelled) -----
+  // ----- APPOINTMENTS: DELETE (soft — status becomes cancelled) -----
   const cancelAppointment = async (id) => {
     const updated = appointments.map((a) =>
-      a.id === id ? { ...a, status: 'Cancelled' } : a
+      a.id === id || a._id === id ? { ...a, status: 'cancelled' } : a
     );
     setAppointments(updated);
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.APPOINTMENTS, JSON.stringify(updated));
+      await welfareService.updateAppointment(id, { status: 'cancelled' });
     } catch (error) {
       console.error('cancelAppointment error:', error);
     }
@@ -91,14 +191,16 @@ export const WelfareProvider = ({ children }) => {
 
   // ----- APPOINTMENTS: DELETE (hard remove) -----
   const deleteAppointment = async (id) => {
-    const updated = appointments.filter((a) => a.id !== id);
+    const updated = appointments.filter((a) => a.id !== id && a._id !== id);
     setAppointments(updated);
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.APPOINTMENTS, JSON.stringify(updated));
+      await welfareService.deleteAppointment(id);
     } catch (error) {
       console.error('deleteAppointment error:', error);
     }
   };
+
 
   // ----- NOTIFICATIONS: UPDATE -----
   const markNotificationRead = async (id) => {
@@ -140,8 +242,30 @@ export const WelfareProvider = ({ children }) => {
     setProfile(updated);
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(updated));
+      await welfareService.updateProfile(changes).catch(() => {});
     } catch (error) {
       console.error('updateProfile error:', error);
+    }
+  };
+
+  // ----- SCHEDULE & AVAILABILITY: UPDATE -----
+  const updateSchedule = async (changes) => {
+    const updated = { ...profile, ...changes };
+    setProfile(updated);
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(updated));
+      const res = await welfareService.updateSchedule(changes).catch(async () => {
+        return await welfareService.updateProfile(changes);
+      });
+      if (res?.officer) {
+        const synced = buildProfileFromAuth(res.officer);
+        setProfile(synced);
+        await AsyncStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(synced));
+      }
+      return res;
+    } catch (error) {
+      console.error('updateSchedule error:', error);
+      throw error;
     }
   };
 
@@ -180,6 +304,7 @@ export const WelfareProvider = ({ children }) => {
     // Getters (READ)
     getAppointments,
     getAppointmentById,
+    refreshAppointments,
 
     // Appointments (UPDATE / DELETE)
     updateAppointment,
@@ -193,6 +318,9 @@ export const WelfareProvider = ({ children }) => {
 
     // Profile (UPDATE)
     updateProfile,
+
+    // Schedule & Availability (UPDATE)
+    updateSchedule,
 
     // Privacy (UPDATE)
     updatePrivacy,

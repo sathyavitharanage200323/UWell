@@ -14,15 +14,15 @@ console.log('[UWell API] Base URL configured:', API_BASE_URL);
 
 api.interceptors.request.use(
   async (config) => {
-    console.log(`[UWell API Req] ${config.method?.toUpperCase()} ${config.baseURL || ''}${config.url}`);
     const token = await AsyncStorage.getItem('token');
+    console.log(`[UWell API Req] ${config.method?.toUpperCase()} ${config.url} | token: ${token ? token.substring(0, 15) + '...' : 'NONE'}`);
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   },
   (error) => {
-    console.error('[UWell API Req Error]', error);
+    console.log('[UWell API Req Error]', error.message || error);
     return Promise.reject(error);
   }
 );
@@ -33,7 +33,8 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
-    console.error(`[UWell API Res Error] ${error.config?.url}:`, error.message, error.response?.status, error.response?.data);
+    // Only console.log to avoid React Native LogBox banners on user screen
+    console.log(`[UWell API] ${error.config?.url} returned ${error.response?.status || 'Network Error'}:`, error.response?.data?.message || error.message);
     if (error.response?.status === 401) {
       AsyncStorage.removeItem('token');
       AsyncStorage.removeItem('user');

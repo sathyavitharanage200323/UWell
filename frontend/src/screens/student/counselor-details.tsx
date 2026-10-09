@@ -66,6 +66,7 @@ export default function CounselorDetailsScreen() {
   const handleViewAvailability = () => {
     navigation.navigate('Availability', {
       counselorId: Number(id),
+      counselorName: counselor.name,
     });
   };
 
