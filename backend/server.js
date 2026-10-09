@@ -68,8 +68,14 @@ app.post('/api/auth/login', (req, res, next) => {
   return require('./src/controllers/student/authController').loginStudent(req, res, next);
 });
 
-// Student Profile
+// Student Profile & CRUD
 app.use('/api/student', require('./src/routes/student/studentRoutes'));
+
+// Mood: CRUD /api/student/mood
+app.use('/api/student/mood', require('./src/routes/student/moodRoutes'));
+
+// Appointments: CRUD /api/student/appointments
+app.use('/api/student/appointments', require('./src/routes/student/appointmentRoutes'));
 
 // ─── Global Error Handler ─────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
