@@ -77,6 +77,10 @@ app.use('/api/student/mood', require('./src/routes/student/moodRoutes'));
 // Appointments: CRUD /api/student/appointments
 app.use('/api/student/appointments', require('./src/routes/student/appointmentRoutes'));
 
+// ─── Counselor Module Routes ──────────────────────────────────────────────────
+// Profile, stats, appointments, students, messages, availability & video session
+app.use('/api/counselor', require('./src/routes/counselor/counselorRoutes'));
+
 // ─── Global Error Handler ─────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
   console.error('❌ Unhandled error:', err);

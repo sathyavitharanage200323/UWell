@@ -91,6 +91,7 @@ const DashboardScreen = ({ navigation }) => {
   const [profile, setProfile] = useState(null);
   const [stats, setStats] = useState(null);
   const [todaySchedule, setTodaySchedule] = useState([]);
+  const [students, setStudents] = useState([]);
   const [loadDotActive, setLoadDotActive] = useState(0);
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -106,15 +107,22 @@ const DashboardScreen = ({ navigation }) => {
     return () => clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', loadDashboardData);
+    return unsubscribe;
+  }, [navigation]);
+
   const loadDashboardData = async () => {
-    const [pData, sData, appts] = await Promise.all([
+    const [pData, sData, appts, studentsData] = await Promise.all([
       counselorService.getCounselorProfile(),
       counselorService.getPerformanceStats(),
-      counselorService.getAppointments()
+      counselorService.getAppointments(),
+      counselorService.getStudents()
     ]);
     setProfile(pData);
     setStats(sData);
     setTodaySchedule(appts.filter(a => a.date === 'Today' || a.status === 'Confirmed'));
+    setStudents(studentsData || []);
   };
 
   const firstName = profile?.name
@@ -123,6 +131,16 @@ const DashboardScreen = ({ navigation }) => {
 
   const initials = profile?.avatarInitials || 'EM';
   const role = profile?.role || 'CLINICAL STAFF';
+
+  const notesWithStudents = students
+    .filter(s => s.sessionNotesHistory && s.sessionNotesHistory.trim())
+    .slice(0, 3);
+
+  const hasNotes = notesWithStudents.length > 0;
+
+  const getStudentFromAppointment = (studentId) => {
+    return students.find(s => s.id === studentId);
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -252,13 +270,38 @@ const DashboardScreen = ({ navigation }) => {
             />
           </View>
 
-          {/* ── TODAY'S SCHEDULE ─────────────────────────────────────── */}
-          <View style={styles.sectionRow}>
-            <Text style={styles.sectionTitle}>TODAY'S SCHEDULE</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Appointments')}>
-              <Text style={styles.viewAllText}>View All  ›</Text>
-            </TouchableOpacity>
-          </View>
+          {/* ── RECENT SESSION NOTES ─────────────────────────────────── */}
+          {hasNotes && (
+            <View>
+              <View style={styles.sectionRow}>
+                <Text style={styles.sectionTitle}>RECENT SESSION NOTES</Text>
+                <TouchableOpacity onPress={() => navigation.navigate('Students')}>
+                  <Text style={styles.viewAllText}>View All  ›</Text>
+                </TouchableOpacity>
+              </View>
+              {notesWithStudents.map((s) => (
+                <TouchableOpacity
+                  key={s.id}
+                  activeOpacity={0.8}
+                  style={styles.notesCard}
+                  onPress={() => navigation.navigate('StudentSession', { studentId: s.id })}
+                  accessibilityLabel={`View notes for ${s.name}`}
+                >
+                  <View style={styles.notesCardHeader}>
+                    <Avatar initials={s.avatarInitials || s.name.substring(0, 2)} size={40} />
+                    <View style={{ flex: 1, marginLeft: spacing.sm }}>
+                      <Text style={styles.studentName}>{s.name}</Text>
+                      <Text style={styles.courseText}>{s.yearCourse}</Text>
+                    </View>
+                    <Feather name="chevron-right" size={16} color={colors.textSecondary} />
+                  </View>
+                  <Text style={styles.notesCardBody} numberOfLines={3}>
+                    {s.sessionNotesHistory}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
 
           {todaySchedule.length === 0 ? (
             <View style={styles.emptyCard}>
@@ -299,6 +342,18 @@ const DashboardScreen = ({ navigation }) => {
                 {/* Info */}
                 <View style={{ flex: 1 }}>
                   <Text style={styles.studentName}>{item.studentName}</Text>
+                  {(() => {
+                    const st = getStudentFromAppointment(item.studentId);
+                    if (st && st.sessionNotesHistory && st.sessionNotesHistory.trim()) {
+                      return (
+                        <View style={styles.sessionMetaRow}>
+                          <Feather name="file-text" size={11} color={colors.primary} />
+                          <Text style={[styles.sessionMetaText, { color: colors.primary, fontWeight: '600' }]}> Has notes</Text>
+                        </View>
+                      );
+                    }
+                    return null;
+                  })()}
                   <View style={styles.sessionMetaRow}>
                     <Ionicons name="person-outline" size={11} color={colors.textSecondary} />
                     <Text style={styles.sessionMetaText}> {item.sessionType}</Text>
@@ -725,6 +780,32 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: 13,
     marginTop: 8
+  },
+  courseText: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    marginTop: 1
+  },
+  notesCard: {
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    shadowColor: '#3D2C2E',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2
+  },
+  notesCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.xs
+  },
+  notesCardBody: {
+    fontSize: 12,
+    color: colors.darkText,
+    lineHeight: 18
   }
 });
 
