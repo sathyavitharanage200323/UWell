@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,41 +6,36 @@ import {
   Pressable,
   TextInput,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { studentService } from '../../services/studentService';
+
+// Fallback shown only when API returns no approved counselors from DB.
+const FALLBACK_COUNSELORS: any[] = [];
 
 export default function CounselorSearchScreen() {
   const navigation = useNavigation<any>();
   const [search, setSearch] = useState('');
   const [selectedFilter, setSelectedFilter] = useState('All');
+  const [counselors, setCounselors] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const counselors = [
-    {
-      id: '1',
-      name: 'Dr. Sarah Perera',
-      specialization: 'Student Counselling',
-      experience: '8 years experience',
-      availability: 'Available today',
-      icon: '👩‍⚕️',
-    },
-    {
-      id: '2',
-      name: 'Ms. Amaya Fernando',
-      specialization: 'Stress & Anxiety',
-      experience: '6 years experience',
-      availability: 'Available tomorrow',
-      icon: '👩‍💼',
-    },
-    {
-      id: '3',
-      name: 'Dr. Kavindu Silva',
-      specialization: 'Academic & Personal Support',
-      experience: '5 years experience',
-      availability: 'Available this week',
-      icon: '👨‍⚕️',
-    },
-  ];
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await studentService.getCounselors();
+        const list = res?.data || [];
+        setCounselors(list.length > 0 ? list : FALLBACK_COUNSELORS);
+      } catch {
+        setCounselors(FALLBACK_COUNSELORS);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
 
   const filters = [
     'All',
@@ -61,19 +56,24 @@ export default function CounselorSearchScreen() {
     let matchesFilter = true;
 
     if (selectedFilter === 'Student Counselling') {
-      matchesFilter =
-        counselor.specialization === 'Student Counselling';
+      matchesFilter = counselor.specialization
+        .toLowerCase()
+        .includes('student counselling');
     }
 
     if (selectedFilter === 'Stress & Anxiety') {
-      matchesFilter =
-        counselor.specialization === 'Stress & Anxiety';
+      matchesFilter = counselor.specialization
+        .toLowerCase()
+        .includes('stress') ||
+        counselor.specialization
+        .toLowerCase()
+        .includes('anxiety');
     }
 
     if (selectedFilter === 'Academic Support') {
-      matchesFilter =
-        counselor.specialization ===
-        'Academic & Personal Support';
+      matchesFilter = counselor.specialization
+        .toLowerCase()
+        .includes('academic');
     }
 
     return matchesSearch && matchesFilter;
@@ -175,23 +175,32 @@ export default function CounselorSearchScreen() {
           Available Counselors
         </Text>
 
-        {filteredCounselors.map((counselor) => (
+        {loading ? (
+          <View style={styles.loadingWrap}>
+            <ActivityIndicator size="large" color="#EF806B" />
+            <Text style={styles.loadingText}>Finding counselors…</Text>
+          </View>
+        ) : filteredCounselors.map((counselor) => (
           <Pressable
-            key={counselor.id}
+            key={counselor._id || counselor.id}
             style={({ pressed }) => [
               styles.counselorCard,
               pressed && styles.cardPressed,
             ]}
             onPress={() =>
               navigation.navigate('CounselorProfile', {
-                counselorId: Number(counselor.id),
+                counselorId:           counselor._id || counselor.id,
+                counselorName:         counselor.name,
+                counselorSpecialization: counselor.specialization,
+                counselorExperience:   counselor.experience,
               })
             }
           >
             {/* Profile */}
             <View style={styles.profileCircle}>
-              <Text style={styles.profileIcon}>
-                {counselor.icon}
+              <Text style={styles.profileInitials}>
+                {counselor.avatarInitials ||
+                  counselor.name.split(' ').map((p: string) => p[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()}
               </Text>
             </View>
 
@@ -229,8 +238,8 @@ export default function CounselorSearchScreen() {
           </Pressable>
         ))}
 
-        {/* Empty State */}
-        {filteredCounselors.length === 0 && (
+        {/* Empty State — only when not loading */}
+        {!loading && filteredCounselors.length === 0 && (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyIcon}>🔍</Text>
 
@@ -434,8 +443,10 @@ const styles = StyleSheet.create({
     marginRight: 13,
   },
 
-  profileIcon: {
-    fontSize: 30,
+  profileInitials: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#EF806B',
   },
 
   counselorInfo: {
@@ -555,5 +566,17 @@ const styles = StyleSheet.create({
     color: '#806F68',
     fontSize: 10,
     lineHeight: 16,
+  },
+
+  loadingWrap: {
+    alignItems: 'center',
+    paddingTop: 40,
+    paddingBottom: 20,
+  },
+
+  loadingText: {
+    marginTop: 12,
+    color: '#8A7770',
+    fontSize: 13,
   },
 });

@@ -150,9 +150,9 @@ export default function AppointmentDetailsScreen() {
   const handleReschedule = () => {
     if (!appointmentId) return;
     navigation.navigate('Availability', {
-      counselorId: 1,
+      counselorId: appt.counselorId || undefined,
       appointmentId,
-      counselorName: appointment?.counselorName || 'Dr. Sarah Perera',
+      counselorName: appt.counselorName || '',
     });
   };
 
@@ -167,10 +167,10 @@ export default function AppointmentDetailsScreen() {
   }
 
   const appt = appointment || {
-    counselorName: 'Dr. Sarah Perera',
+    counselorName: '',
     counselorSpecialization: 'Student Counselling',
-    date: 'Mon, Oct 12',
-    time: '09:00 AM',
+    date: '',
+    time: '',
     sessionType: 'Online',
     status: 'upcoming',
     notes: '',

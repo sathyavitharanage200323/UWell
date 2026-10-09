@@ -18,9 +18,11 @@ export default function BookAppointmentScreen() {
     date?: string;
     time?: string;
     counselorName?: string;
+    counselorSpecialization?: string;
+    counselorExperience?: string;
     appointmentId?: string;
   } || {};
-  const { counselorId, date, time, counselorName, appointmentId } = params;
+  const { counselorId, date, time, counselorName, counselorSpecialization, counselorExperience, appointmentId } = params;
   const isReschedule = !!appointmentId;
 
   const [sessionType, setSessionType] = useState('Online');
@@ -28,10 +30,11 @@ export default function BookAppointmentScreen() {
 
   const handleReviewBooking = () => {
     navigation.navigate('ReviewBooking', {
-      counselorId: String(counselorId || '1'),
-      counselorName: counselorName || 'Dr. Sarah Perera',
-      date: String(date || 'Mon, Oct 12'),
-      time: String(time || '09:00 AM'),
+      counselorId: String(counselorId || ''),
+      counselorName: counselorName || '',
+      counselorSpecialization: counselorSpecialization || 'Student Counselling',
+      date: String(date || ''),
+      time: String(time || ''),
       sessionType,
       notes,
       appointmentId,
@@ -76,23 +79,27 @@ export default function BookAppointmentScreen() {
 
         <View style={styles.counselorCard}>
           <View style={styles.profileCircle}>
-            <Text style={styles.profileIcon}>
-              👩‍⚕️
+            <Text style={styles.profileInitials}>
+              {counselorName
+                ? counselorName.split(' ').map((p: string) => p[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
+                : '?'}
             </Text>
           </View>
 
           <View style={styles.counselorInfo}>
             <Text style={styles.counselorName}>
-              Dr. Sarah Perera
+              {counselorName || 'Counselor'}
             </Text>
 
             <Text style={styles.specialization}>
-              Student Counselling
+              {counselorSpecialization || 'Student Counselling'}
             </Text>
 
-            <Text style={styles.experience}>
-              8 years experience
-            </Text>
+            {!!counselorExperience && (
+              <Text style={styles.experience}>
+                {counselorExperience}
+              </Text>
+            )}
           </View>
         </View>
 
@@ -364,8 +371,10 @@ const styles = StyleSheet.create({
     marginRight: 13,
   },
 
-  profileIcon: {
-    fontSize: 30,
+  profileInitials: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#EF806B',
   },
 
   counselorInfo: {

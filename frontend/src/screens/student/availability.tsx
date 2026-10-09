@@ -1,73 +1,114 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Pressable,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { studentService } from '../../services/studentService';
+
+// Day-of-week name from a date string like "Mon, Oct 12" → "Monday"
+const DAY_MAP: Record<string, string> = {
+  Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday',
+  Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday', Sun: 'Sunday',
+};
+
+// Fallback static slots used when the API returns nothing for a day
+const FALLBACK_SLOTS: Record<string, string[]> = {
+  Monday:    ['09:00 AM', '10:00 AM', '11:00 AM', '02:00 PM', '03:00 PM', '04:00 PM'],
+  Tuesday:   ['09:00 AM', '10:00 AM', '02:00 PM', '03:30 PM'],
+  Wednesday: ['10:00 AM', '11:00 AM', '01:00 PM', '03:00 PM'],
+  Thursday:  [],
+  Friday:    ['09:00 AM', '10:00 AM', '11:00 AM'],
+};
 
 export default function AvailabilityScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute();
   const params = route.params as {
-    counselorId?: number;
+    counselorId?: string;
     counselorName?: string;
+    counselorSpecialization?: string;
+    counselorExperience?: string;
     appointmentId?: string;
   } || {};
-  const { counselorId, counselorName, appointmentId } = params;
+  const { counselorId, counselorName, counselorSpecialization, counselorExperience, appointmentId } = params;
   const isReschedule = !!appointmentId;
-  const id = String(counselorId || '1');
 
-  const [selectedDate, setSelectedDate] = useState('Mon, Oct 12');
-  const [selectedTime, setSelectedTime] = useState<string | null>(null);
-
-  const dates = [
-    {
-      day: 'Mon',
-      date: '12',
-      month: 'Oct',
-    },
-    {
-      day: 'Tue',
-      date: '13',
-      month: 'Oct',
-    },
-    {
-      day: 'Wed',
-      date: '14',
-      month: 'Oct',
-    },
-    {
-      day: 'Thu',
-      date: '15',
-      month: 'Oct',
-    },
-    {
-      day: 'Fri',
-      date: '16',
-      month: 'Oct',
-    },
-  ];
-
-  const timeSlots: Record<string, string[]> = {
-    '1': ['09:00 AM', '10:00 AM', '11:30 AM', '02:00 PM', '03:30 PM'],
-    '2': ['08:30 AM', '10:30 AM', '01:00 PM', '02:30 PM', '04:00 PM'],
-    '3': ['09:00 AM', '11:00 AM', '12:30 PM', '03:00 PM', '05:00 PM'],
+  // Generate next 5 working days from today
+  const buildDates = () => {
+    const days = [];
+    const d = new Date();
+    while (days.length < 5) {
+      const dow = d.getDay(); // 0=Sun,6=Sat
+      if (dow !== 0 && dow !== 6) {
+        const dayAbbr = d.toLocaleDateString('en-US', { weekday: 'short' }); // Mon
+        const date    = d.getDate().toString();
+        const month   = d.toLocaleDateString('en-US', { month: 'short' });   // Oct
+        days.push({ day: dayAbbr, date, month });
+      }
+      d.setDate(d.getDate() + 1);
+    }
+    return days;
   };
 
-  const slots = timeSlots[id] || timeSlots['1'];
+  const dates = buildDates();
+  const defaultDate = `${dates[0].day}, ${dates[0].month} ${dates[0].date}`;
+
+  const [selectedDate, setSelectedDate] = useState(defaultDate);
+  const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  const [availabilityMap, setAvailabilityMap] = useState<Record<string, string[]>>({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await studentService.getCounselorAvailability(
+          counselorId ? String(counselorId) : undefined
+        );
+        const data: any[] = res?.data || [];
+        const map: Record<string, string[]> = {};
+        data.forEach((entry: any) => {
+          if (entry.active && Array.isArray(entry.slots) && entry.slots.length > 0) {
+            map[entry.day] = entry.slots;
+          }
+        });
+        if (Object.keys(map).length > 0) {
+          // Fill only missing days from fallback — preserve real DB data for present days
+          const merged: Record<string, string[]> = { ...FALLBACK_SLOTS, ...map };
+          setAvailabilityMap(merged);
+        } else {
+          setAvailabilityMap(FALLBACK_SLOTS);
+        }
+      } catch {
+        setAvailabilityMap(FALLBACK_SLOTS);
+      } finally {
+        setLoading(false);
+      }
+    };
+    setLoading(true);
+    setSelectedTime(null);
+    load();
+  }, [counselorId]);
+
+  // Slots for the currently selected date
+  const selectedDayAbbr = selectedDate.split(',')[0]?.trim(); // "Mon"
+  const selectedDayFull = DAY_MAP[selectedDayAbbr] || '';
+  const slots = availabilityMap[selectedDayFull] || [];
 
   const handleContinue = () => {
     if (!selectedTime) return;
-
     navigation.navigate('BookAppointment', {
-      counselorId: Number(id),
-      counselorName: counselorName || 'Dr. Sarah Perera',
-      date: selectedDate,
-      time: selectedTime,
+      counselorId,
+      counselorName:             counselorName || '',
+      counselorSpecialization:   counselorSpecialization || '',
+      counselorExperience:       counselorExperience || '',
+      date:                      selectedDate,
+      time:                      selectedTime,
       appointmentId,
     });
   };
@@ -106,14 +147,16 @@ export default function AvailabilityScreen() {
         {/* Selected Counselor */}
         <View style={styles.counselorCard}>
           <View style={styles.profileCircle}>
-            <Text style={styles.profileIcon}>
-              👩‍⚕️
+            <Text style={styles.profileInitials}>
+              {counselorName
+                ? counselorName.split(' ').map((p: string) => p[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
+                : '?'}
             </Text>
           </View>
 
           <View style={styles.counselorInfo}>
             <Text style={styles.counselorName}>
-              Counselor
+              {counselorName || 'Counselor'}
             </Text>
 
             <Text style={styles.counselorText}>
@@ -123,7 +166,6 @@ export default function AvailabilityScreen() {
 
           <View style={styles.availableBadge}>
             <View style={styles.availableDot} />
-
             <Text style={styles.availableText}>
               Available
             </Text>
@@ -192,31 +234,35 @@ export default function AvailabilityScreen() {
           Available Time Slots
         </Text>
 
-        <View style={styles.timeGrid}>
-          {slots.map((time) => {
-            const isSelected = selectedTime === time;
-
-            return (
-              <Pressable
-                key={time}
-                style={[
-                  styles.timeButton,
-                  isSelected && styles.selectedTimeButton,
-                ]}
-                onPress={() => setSelectedTime(time)}
-              >
-                <Text
+        {loading ? (
+          <ActivityIndicator color="#EF806B" style={{ marginBottom: 20 }} />
+        ) : slots.length === 0 ? (
+          <View style={styles.noSlotsCard}>
+            <Text style={styles.noSlotsText}>
+              No available slots for this day. Please choose another date.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.timeGrid}>
+            {slots.map((time) => {
+              const isSelected = selectedTime === time;
+              return (
+                <Pressable
+                  key={time}
                   style={[
-                    styles.timeText,
-                    isSelected && styles.selectedTimeText,
+                    styles.timeButton,
+                    isSelected && styles.selectedTimeButton,
                   ]}
+                  onPress={() => setSelectedTime(time)}
                 >
-                  {time}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+                  <Text style={[styles.timeText, isSelected && styles.selectedTimeText]}>
+                    {time}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
 
         {/* Reminder */}
         <View style={styles.reminderCard}>
@@ -333,8 +379,10 @@ const styles = StyleSheet.create({
     marginRight: 11,
   },
 
-  profileIcon: {
-    fontSize: 27,
+  profileInitials: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#EF806B',
   },
 
   counselorInfo: {
@@ -427,6 +475,19 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 
+  noSlotsCard: {
+    backgroundColor: '#F7F3EF',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  noSlotsText: {
+    color: '#806F68',
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: 'center',
+  },
   timeGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',

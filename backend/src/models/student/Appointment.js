@@ -7,6 +7,11 @@ const appointmentSchema = new mongoose.Schema(
       ref: 'Student',
       required: true,
     },
+    counselorId: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     counselorName: {
       type: String,
       required: [true, 'Counselor name is required'],

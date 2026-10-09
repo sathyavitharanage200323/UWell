@@ -1,11 +1,13 @@
 const Appointment = require('../../models/student/Appointment');
+const Student = require('../../models/student/Student');
+const CounselorAppointment = require('../../models/counselor/CounselorAppointment');
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  CREATE  POST /api/student/appointments
 // ─────────────────────────────────────────────────────────────────────────────
 exports.createAppointment = async (req, res) => {
   try {
-    const { counselorName, counselorSpecialization, date, time, sessionType, notes } = req.body;
+    const { counselorId, counselorName, counselorSpecialization, date, time, sessionType, notes } = req.body;
 
     if (!counselorName || !date || !time) {
       return res.status(400).json({
@@ -14,16 +16,64 @@ exports.createAppointment = async (req, res) => {
       });
     }
 
+    // Create student-side appointment
     const appointment = await Appointment.create({
       student: req.user.id,
+      counselorId:              counselorId || null,
       counselorName,
-      counselorSpecialization: counselorSpecialization || 'Student Counselling',
+      counselorSpecialization:  counselorSpecialization || 'Student Counselling',
       date,
       time,
-      sessionType: sessionType || 'Online',
-      notes: notes || '',
-      status: 'upcoming',
+      sessionType:  sessionType || 'Online',
+      notes:        notes || '',
+      status:       'upcoming',
     });
+
+    // Mirror to counselor_appointments so counselor can see this booking.
+    // Uses upsert on the stable key so retries never create duplicates.
+    try {
+      const student = await Student.findById(req.user.id).lean();
+      const studentName = student
+        ? `${student.firstName} ${student.lastName}`
+        : 'Student';
+      const studentCourse = student
+        ? `${student.yearOfStudy} · ${student.degreeProgram}`
+        : '';
+      const initials = student
+        ? `${(student.firstName || '')[0]}${(student.lastName || '')[0]}`.toUpperCase()
+        : 'ST';
+
+      const mirrorId = `stu-appt-${appointment._id}`;
+
+      await CounselorAppointment.findOneAndUpdate(
+        { _id: mirrorId },
+        {
+          $setOnInsert: {
+            _id:               mirrorId,
+            studentId:         String(req.user.id),
+            counselorId:       counselorId ? String(counselorId) : '',
+            counselorName:     counselorName || '',
+            studentName,
+            studentCourse,
+            sessionType:       sessionType || 'Online',
+            date,
+            time,
+            location:          sessionType === 'In Person' ? 'In-Person Room 304' : 'Online Session',
+            status:            'Pending',
+            notes:             notes || '',
+            avatarInitials:    initials,
+          },
+        },
+        { upsert: true, new: false }
+      );
+
+      console.log(`[Booking] Mirror created for appointment ${appointment._id}`);
+    } catch (mirrorErr) {
+      // Non-blocking — student appointment already saved successfully.
+      // Log the error type only; no student data in the log.
+      const errCode = mirrorErr?.code || mirrorErr?.name || 'UNKNOWN';
+      console.error(`[Booking] Counselor mirror failed (${errCode}) for appointment ${appointment._id}. Student booking is intact.`);
+    }
 
     res.status(201).json({
       success: true,

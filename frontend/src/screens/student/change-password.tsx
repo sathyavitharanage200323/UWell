@@ -7,15 +7,18 @@ import {
   ScrollView,
   TextInput,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { studentService } from '../../services/studentService';
 
 export default function ChangePasswordScreen() {
   const navigation = useNavigation<any>();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const [showCurrentPassword, setShowCurrentPassword] =
     useState(false);
@@ -26,65 +29,57 @@ export default function ChangePasswordScreen() {
   const [showConfirmPassword, setShowConfirmPassword] =
     useState(false);
 
-  const handleChangePassword = () => {
+  const handleChangePassword = async () => {
+    // ── Client-side validation ──────────────────────────────────────────
     if (!currentPassword.trim()) {
-      Alert.alert(
-        'Missing Information',
-        'Please enter your current password.',
-      );
+      Alert.alert('Missing Information', 'Please enter your current password.');
       return;
     }
-
     if (!newPassword.trim()) {
-      Alert.alert(
-        'Missing Information',
-        'Please enter a new password.',
-      );
+      Alert.alert('Missing Information', 'Please enter a new password.');
       return;
     }
-
     if (newPassword.length < 8) {
-      Alert.alert(
-        'Invalid Password',
-        'Your new password must contain at least 8 characters.',
-      );
+      Alert.alert('Invalid Password', 'Your new password must contain at least 8 characters.');
       return;
     }
-
     if (!confirmPassword.trim()) {
-      Alert.alert(
-        'Missing Information',
-        'Please confirm your new password.',
-      );
+      Alert.alert('Missing Information', 'Please confirm your new password.');
       return;
     }
-
     if (newPassword !== confirmPassword) {
-      Alert.alert(
-        'Password Mismatch',
-        'New password and confirm password do not match.',
-      );
+      Alert.alert('Password Mismatch', 'New password and confirm password do not match.');
       return;
     }
-
     if (currentPassword === newPassword) {
-      Alert.alert(
-        'Invalid Password',
-        'Your new password must be different from your current password.',
-      );
+      Alert.alert('Invalid Password', 'Your new password must be different from your current password.');
       return;
     }
 
-    Alert.alert(
-      'Password Updated',
-      'Your password has been updated successfully.',
-      [
-        {
-          text: 'OK',
-          onPress: () => navigation.goBack(),
-        },
-      ],
-    );
+    // ── API call ────────────────────────────────────────────────────────
+    try {
+      setLoading(true);
+      await studentService.changePassword(currentPassword, newPassword);
+
+      // Clear fields before navigating
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+
+      Alert.alert(
+        'Password Updated',
+        'Your password has been changed successfully.',
+        [{ text: 'OK', onPress: () => navigation.goBack() }],
+      );
+    } catch (err: any) {
+      const message =
+        err?.response?.data?.message ||
+        err?.message ||
+        'Could not update your password. Please try again.';
+      Alert.alert('Update Failed', message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -270,18 +265,24 @@ export default function ChangePasswordScreen() {
 
         {/* Change Password Button */}
         <Pressable
-          style={styles.changeButton}
+          style={[styles.changeButton, loading && styles.changeButtonDisabled]}
           onPress={handleChangePassword}
+          disabled={loading}
         >
-          <Text style={styles.changeButtonText}>
-            Change Password
-          </Text>
+          {loading ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.changeButtonText}>
+              Change Password
+            </Text>
+          )}
         </Pressable>
 
         {/* Cancel */}
         <Pressable
           style={styles.cancelButton}
           onPress={() => navigation.goBack()}
+          disabled={loading}
         >
           <Text style={styles.cancelButtonText}>
             Cancel
@@ -497,6 +498,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 20,
+  },
+
+  changeButtonDisabled: {
+    backgroundColor: '#D4B3AB',
   },
 
   changeButtonText: {

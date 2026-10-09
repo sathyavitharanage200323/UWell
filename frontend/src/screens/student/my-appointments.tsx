@@ -187,9 +187,10 @@ export default function MyAppointmentsScreen() {
               </View>
             ) : (
               past.map(appt => (
-                <View
+                <Pressable
                   key={appt._id}
-                  style={[styles.card, styles.cardPast]}
+                  style={({ pressed }) => [styles.card, styles.cardPast, pressed && { opacity: 0.75 }]}
+                  onPress={() => navigation.navigate('AppointmentDetails', { appointmentId: appt._id })}
                 >
                   <View style={styles.cardLeft}>
                     <View style={[styles.dateBox, styles.dateBoxPast]}>
@@ -210,7 +211,7 @@ export default function MyAppointmentsScreen() {
                       <Text style={styles.metaText}>{appt.time}</Text>
                     </View>
                   </View>
-                </View>
+                </Pressable>
               ))
             )}
 

@@ -82,18 +82,19 @@ export default function BookingReviewScreen() {
     sessionType?: string;
     notes?: string;
     counselorName?: string;
+    counselorSpecialization?: string;
     appointmentId?: string;
   } || {};
-  const { date, time, sessionType, notes, counselorName, appointmentId } = params;
+  const { date, time, sessionType, notes, counselorName, counselorSpecialization, counselorId, appointmentId } = params;
   const isReschedule = !!appointmentId;
 
   const [loading, setLoading] = useState(false);
 
   const handleConfirmBooking = async () => {
-    const dateStr = String(date || 'Mon, Oct 12');
-    const timeStr = String(time || '09:00 AM');
+    const dateStr   = String(date   || '');
+    const timeStr   = String(time   || '');
     const sessionTypeStr = String(sessionType || 'Online');
-    const notesStr = String(notes || '');
+    const notesStr  = String(notes  || '');
 
     try {
       setLoading(true);
@@ -117,18 +118,21 @@ export default function BookingReviewScreen() {
       }
 
       const res = await studentService.bookAppointment({
-        counselorName: counselorName || 'Dr. Sarah Perera',
-        counselorSpecialization: 'Student Counselling',
-        date: dateStr,
-        time: timeStr,
-        sessionType: sessionTypeStr,
-        notes: notesStr,
+        counselorId:             counselorId || '',
+        counselorName:           counselorName || '',
+        counselorSpecialization: counselorSpecialization || 'Student Counselling',
+        date:                    dateStr,
+        time:                    timeStr,
+        sessionType:             sessionTypeStr,
+        notes:                   notesStr,
       });
       navigation.navigate('BookingConfirmed', {
-        appointmentId: res?.data?._id || '',
-        date: dateStr,
-        time: timeStr,
-        sessionType: sessionTypeStr,
+        appointmentId:           res?.data?._id || '',
+        counselorName:           counselorName || '',
+        counselorSpecialization: counselorSpecialization || 'Student Counselling',
+        date:                    dateStr,
+        time:                    timeStr,
+        sessionType:             sessionTypeStr,
       });
     } catch (err: any) {
       Alert.alert(
@@ -176,8 +180,8 @@ export default function BookingReviewScreen() {
             <View style={styles.iconBox}><PersonIcon /></View>
             <View style={styles.detailContent}>
               <Text style={styles.detailLabel}>Counselor</Text>
-              <Text style={styles.detailValue}>{counselorName || 'Dr. Sarah Perera'}</Text>
-              <Text style={styles.detailSub}>Student Counselling</Text>
+              <Text style={styles.detailValue}>{counselorName || 'Counselor'}</Text>
+              <Text style={styles.detailSub}>{counselorSpecialization || 'Student Counselling'}</Text>
             </View>
           </View>
 
@@ -187,7 +191,7 @@ export default function BookingReviewScreen() {
             <View style={styles.iconBox}><CalendarIcon /></View>
             <View style={styles.detailContent}>
               <Text style={styles.detailLabel}>Date</Text>
-              <Text style={styles.detailValue}>{String(date || 'Mon, Oct 12')}</Text>
+              <Text style={styles.detailValue}>{String(date || '')}</Text>
             </View>
           </View>
 
@@ -197,7 +201,7 @@ export default function BookingReviewScreen() {
             <View style={styles.iconBox}><ClockIcon /></View>
             <View style={styles.detailContent}>
               <Text style={styles.detailLabel}>Time</Text>
-              <Text style={styles.detailValue}>{String(time || '09:00 AM')}</Text>
+              <Text style={styles.detailValue}>{String(time || '')}</Text>
             </View>
           </View>
 

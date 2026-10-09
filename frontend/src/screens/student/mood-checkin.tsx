@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  Alert,
   Easing,
   Pressable,
   ScrollView,
@@ -456,6 +457,40 @@ export default function MoodCheckInScreen() {
     }
   };
 
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDeleteMood = (entry: MoodEntry) => {
+    if (!entry._id) return;
+    Alert.alert(
+      'Delete Check-In',
+      `Remove the "${entry.mood}" check-in from your history?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setDeletingId(entry._id!);
+              await studentService.deleteMood(entry._id!);
+              // Optimistic local remove, then re-fetch for consistency
+              setMoodHistory(prev => prev.filter(e => e._id !== entry._id));
+              await loadMoodHistory();
+            } catch (err: any) {
+              const msg =
+                err?.response?.data?.message ||
+                err?.message ||
+                'Could not delete this entry. Please try again.';
+              Alert.alert('Delete Failed', msg);
+            } finally {
+              setDeletingId(null);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   useFocusEffect(
     React.useCallback(() => {
       loadMoodHistory();
@@ -465,18 +500,15 @@ export default function MoodCheckInScreen() {
   const handleContinue = async () => {
     if (!selectedMood) return;
 
-    // Save to backend (non-blocking — navigate even if it fails)
+    // Navigate immediately so user sees result without waiting for API
+    navigation.navigate('MoodResult', { mood: selectedMood });
+
+    // Save to backend after navigating — useFocusEffect reloads history on return
     try {
       await studentService.createMood(selectedMood);
-      loadMoodHistory();
     } catch (e) {
-      // silently fail — app works offline too
       console.log('[Mood] Backend save failed, continuing offline:', e?.message);
     }
-
-    navigation.navigate('MoodResult', {
-      mood: selectedMood,
-    });
   };
 
   return (
@@ -741,6 +773,18 @@ export default function MoodCheckInScreen() {
                     )}
                   </View>
                   <Text style={styles.historyDate}>{formatMoodDate(entry)}</Text>
+                  {entry._id ? (
+                    <Pressable
+                      style={styles.historyDeleteBtn}
+                      onPress={() => handleDeleteMood(entry)}
+                      disabled={deletingId === entry._id}
+                      accessibilityLabel="Delete this check-in"
+                    >
+                      <Text style={styles.historyDeleteText}>
+                        {deletingId === entry._id ? '…' : '✕'}
+                      </Text>
+                    </Pressable>
+                  ) : null}
                 </View>
               ))
             )}
@@ -1512,6 +1556,22 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: MUTED,
     marginLeft: 8,
+  },
+
+  historyDeleteBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FBE1DE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+
+  historyDeleteText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#C94C4C',
   },
 
   encouragement: {

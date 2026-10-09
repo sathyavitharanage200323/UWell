@@ -34,7 +34,7 @@ exports.createMood = async (req, res) => {
 exports.getMoods = async (req, res) => {
   try {
     const moods = await MoodCheck.find({ student: req.user.id })
-      .sort({ date: -1 })
+      .sort({ createdAt: -1 })
       .limit(30);
 
     res.status(200).json({ success: true, count: moods.length, data: moods });

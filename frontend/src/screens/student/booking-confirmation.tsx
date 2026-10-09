@@ -15,8 +15,9 @@ export default function BookingConfirmationScreen() {
   const params = route.params as {
     counselorId?: string; date?: string; time?: string;
     sessionType?: string; notes?: string; appointmentId?: string;
+    counselorName?: string; counselorSpecialization?: string;
   } || {};
-  const { counselorId, date, time, sessionType, notes, appointmentId } = params;
+  const { date, time, sessionType, notes, appointmentId, counselorName, counselorSpecialization } = params;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -59,9 +60,9 @@ export default function BookingConfirmationScreen() {
 
             <View style={styles.detailContent}>
               <Text style={styles.label}>Counselor</Text>
-              <Text style={styles.value}>Dr. Sarah Perera</Text>
+              <Text style={styles.value}>{counselorName || 'Counselor'}</Text>
               <Text style={styles.secondaryValue}>
-                Student Counselling
+                {counselorSpecialization || 'Student Counselling'}
               </Text>
             </View>
           </View>

@@ -10,11 +10,10 @@ async function seed() {
   await mongoose.connect(process.env.MONGO_URI);
   console.log('Connected to MongoDB');
 
-  // Update existing counselors status
-  await Counselor.updateOne({ staffId: 'CNS2024001' }, { status: 'Available' });
-  await Counselor.updateOne({ staffId: 'CNS2024002' }, { status: 'In Session' });
+  // CNS2024001 and CNS2024002 status is NOT touched here — preserves any
+  // status set by team members on the shared database.
 
-  // Add Dr. Sarah Perera if not exists
+  // Add Dr. Sarah Perera if not exists — guarded by staffId lookup
   let sarah = await Counselor.findOne({ staffId: 'CNS2024003' });
   if (!sarah) {
     sarah = await Counselor.create({
@@ -32,11 +31,18 @@ async function seed() {
       approvalStatus: 'approved',
       password: 'Password123!',
       role: 'counselor',
+      profileImage: 'https://ui-avatars.com/api/?name=Sarah+Perera&background=FCE3DD&color=EF806B&size=200&bold=true',
     });
     console.log('Created Dr. Sarah Perera');
+  } else {
+    // Backfill profileImage if missing on existing record
+    if (!sarah.profileImage) {
+      await Counselor.updateOne({ _id: sarah._id }, { profileImage: 'https://ui-avatars.com/api/?name=Sarah+Perera&background=FCE3DD&color=EF806B&size=200&bold=true' });
+      console.log('Updated Dr. Sarah Perera profileImage');
+    }
   }
 
-  // Add Dr. Kavindu Silva if not exists
+  // Add Dr. Kavindu Silva if not exists — guarded by staffId lookup
   let kavindu = await Counselor.findOne({ staffId: 'CNS2024004' });
   if (!kavindu) {
     kavindu = await Counselor.create({
@@ -54,21 +60,36 @@ async function seed() {
       approvalStatus: 'approved',
       password: 'Password123!',
       role: 'counselor',
+      profileImage: 'https://ui-avatars.com/api/?name=Kavindu+Silva&background=DCE8DE&color=557B60&size=200&bold=true',
     });
     console.log('Created Dr. Kavindu Silva');
+  } else {
+    // Backfill profileImage if missing on existing record
+    if (!kavindu.profileImage) {
+      await Counselor.updateOne({ _id: kavindu._id }, { profileImage: 'https://ui-avatars.com/api/?name=Kavindu+Silva&background=DCE8DE&color=557B60&size=200&bold=true' });
+      console.log('Updated Dr. Kavindu Silva profileImage');
+    }
   }
 
-  // Find students
+  // Re-fetch in case they already existed (sarah/_id needed below)
+  if (!sarah) sarah = await Counselor.findOne({ staffId: 'CNS2024003' });
+  if (!kavindu) kavindu = await Counselor.findOne({ staffId: 'CNS2024004' });
+
+  // Seed demo appointments — guard by counselor ObjectId to avoid duplicates
+  // across re-runs and across different calendar days.
   const student = await Student.findOne();
-  if (student) {
-    const existingLive = await Appointment.findOne({ date: 'Today' });
-    if (!existingLive) {
+  if (student && sarah && kavindu) {
+    const existingDemo = await Appointment.findOne({
+      counselor: sarah._id,
+      notes: 'Exam stress & anxiety management session',
+    });
+    if (!existingDemo) {
       await Appointment.create({
         student: student._id,
         studentName: 'Lily Fernando',
         counselor: sarah._id,
-        counselorName: 'Dr. Sarah Perera',
-        counselorSpecialization: 'Student Counselling & Wellness',
+        counselorName: `${sarah.firstName} ${sarah.lastName}`,
+        counselorSpecialization: sarah.specialization,
         date: 'Today',
         time: '10:00 AM',
         sessionType: 'Online',
@@ -79,8 +100,8 @@ async function seed() {
         student: student._id,
         studentName: 'Amal Perera',
         counselor: kavindu._id,
-        counselorName: 'Dr. Kavindu Silva',
-        counselorSpecialization: 'Depression & Crisis Intervention',
+        counselorName: `${kavindu.firstName} ${kavindu.lastName}`,
+        counselorSpecialization: kavindu.specialization,
         date: 'Today',
         time: '01:30 PM',
         sessionType: 'In Person',
@@ -91,15 +112,17 @@ async function seed() {
         student: student._id,
         studentName: 'Dilika Dilmith',
         counselor: sarah._id,
-        counselorName: 'Dr. Rachel Green',
-        counselorSpecialization: 'Anxiety & Stress Management',
+        counselorName: `${sarah.firstName} ${sarah.lastName}`,
+        counselorSpecialization: sarah.specialization,
         date: 'Today',
         time: '03:00 PM',
         sessionType: 'Online',
         status: 'Scheduled',
         notes: 'Academic workload balance consultation',
       });
-      console.log('Created today live sessions');
+      console.log('Created demo live sessions');
+    } else {
+      console.log('Demo sessions already exist — skipped');
     }
   }
 

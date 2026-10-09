@@ -1,74 +1,90 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Pressable,
   ScrollView,
+  ActivityIndicator,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { studentService } from '../../services/studentService';
 
-type Counselor = {
+type CounselorData = {
+  _id?: string;
   name: string;
   specialization: string;
   experience: string;
   qualification: string;
-  icon: string;
-  bio: string;
+  bio?: string;
   availability: string;
+  avatarInitials?: string;
+  profileImage?: string;
+};
+
+// Generic fallback — shown only when API fails and no counselorId was provided
+const FALLBACK: CounselorData = {
+  name: 'Counselor',
+  specialization: 'Student Counselling',
+  experience: '',
+  qualification: '',
+  bio: '',
+  availability: '',
+  avatarInitials: '?',
+  profileImage: '',
 };
 
 export default function CounselorDetailsScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute();
-  const params = route.params as { counselorId?: number } || {};
-  const { counselorId } = params;
-  const id = String(counselorId || '1');
+  const params = route.params as { counselorId?: any; counselorName?: string } || {};
+  const { counselorId, counselorName } = params;
 
-  const counselors: Record<string, Counselor> = {
-    '1': {
-      name: 'Dr. Sarah Perera',
-      specialization: 'Student Counselling',
-      experience: '8 years experience',
-      qualification: 'PhD in Counselling Psychology',
-      icon: '👩‍⚕️',
-      bio:
-        'Experienced in supporting university students with personal, academic and emotional wellbeing concerns.',
-      availability: 'Available today',
-    },
+  const [counselor, setCounselor] = useState<CounselorData | null>(null);
+  const [loading, setLoading] = useState(true);
 
-    '2': {
-      name: 'Ms. Amaya Fernando',
-      specialization: 'Stress & Anxiety',
-      experience: '6 years experience',
-      qualification: 'MSc in Psychology',
-      icon: '👩‍💼',
-      bio:
-        'Specializes in helping students manage stress, anxiety and challenges related to university life.',
-      availability: 'Available tomorrow',
-    },
-
-    '3': {
-      name: 'Dr. Kavindu Silva',
-      specialization: 'Academic & Personal Support',
-      experience: '5 years experience',
-      qualification: 'MA in Counselling Psychology',
-      icon: '👨‍⚕️',
-      bio:
-        'Provides supportive counselling for academic pressure, personal challenges and student wellbeing.',
-      availability: 'Available this week',
-    },
-  };
-
-  const counselor = counselors[String(id)] || counselors['1'];
+  useEffect(() => {
+    const load = async () => {
+      try {
+        if (counselorId) {
+          const res = await studentService.getCounselorById(String(counselorId));
+          const d = res?.data;
+          if (d) { setCounselor(d); setLoading(false); return; }
+        }
+        // fallback
+        setCounselor(FALLBACK['1']);
+      } catch {
+        setCounselor(FALLBACK);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [counselorId]);
 
   const handleViewAvailability = () => {
+    const current = counselor || FALLBACK['1'];
     navigation.navigate('Availability', {
-      counselorId: Number(id),
-      counselorName: counselor.name,
+      counselorId,
+      counselorName:           current.name || counselorName || 'Counselor',
+      counselorSpecialization: current.specialization || '',
+      counselorExperience:     current.experience || '',
     });
   };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator size="large" color="#EF806B" />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const c = counselor || FALLBACK;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -88,96 +104,71 @@ export default function CounselorDetailsScreen() {
 
         {/* Profile Header */}
         <View style={styles.profileSection}>
+          {/* Avatar — real photo when available, initials as fallback */}
           <View style={styles.profileCircle}>
-            <Text style={styles.profileIcon}>
-              {counselor.icon}
-            </Text>
+            {c.profileImage ? (
+              <Image
+                source={{ uri: c.profileImage }}
+                style={styles.profileImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <Text style={styles.profileInitials}>
+                {(c.avatarInitials ||
+                  c.name.split(' ').map((p: string) => p[0]).filter(Boolean).slice(0, 2).join('')
+                ).toUpperCase()}
+              </Text>
+            )}
           </View>
 
-          <Text style={styles.name}>
-            {counselor.name}
-          </Text>
+          <Text style={styles.name}>{c.name}</Text>
 
-          <Text style={styles.specialization}>
-            {counselor.specialization}
-          </Text>
+          <Text style={styles.specialization}>{c.specialization}</Text>
 
           <View style={styles.availableRow}>
             <View style={styles.availableDot} />
-
-            <Text style={styles.availableText}>
-              {counselor.availability}
-            </Text>
+            <Text style={styles.availableText}>{c.availability}</Text>
           </View>
         </View>
 
         {/* About */}
-        <Text style={styles.sectionTitle}>
-          About the Counselor
-        </Text>
+        <Text style={styles.sectionTitle}>About the Counselor</Text>
 
         <View style={styles.card}>
-          <Text style={styles.bio}>
-            {counselor.bio}
-          </Text>
+          <Text style={styles.bio}>{c.bio || 'Experienced counselor supporting university students.'}</Text>
         </View>
 
         {/* Professional Details */}
-        <Text style={styles.sectionTitle}>
-          Professional Details
-        </Text>
+        <Text style={styles.sectionTitle}>Professional Details</Text>
 
         <View style={styles.card}>
-
-          {/* Qualification */}
           <View style={styles.detailRow}>
             <Text style={styles.detailIcon}>🎓</Text>
-
             <View style={styles.detailContent}>
-              <Text style={styles.detailLabel}>
-                Qualification
-              </Text>
-
-              <Text style={styles.detailValue}>
-                {counselor.qualification}
-              </Text>
+              <Text style={styles.detailLabel}>Qualification</Text>
+              <Text style={styles.detailValue}>{c.qualification}</Text>
             </View>
           </View>
 
           <View style={styles.divider} />
 
-          {/* Experience */}
           <View style={styles.detailRow}>
             <Text style={styles.detailIcon}>💼</Text>
-
             <View style={styles.detailContent}>
-              <Text style={styles.detailLabel}>
-                Experience
-              </Text>
-
-              <Text style={styles.detailValue}>
-                {counselor.experience}
-              </Text>
+              <Text style={styles.detailLabel}>Experience</Text>
+              <Text style={styles.detailValue}>{c.experience}</Text>
             </View>
           </View>
 
           <View style={styles.divider} />
 
-          {/* Specialization */}
           <View style={styles.detailRow}>
             <Text style={styles.detailIcon}>🧠</Text>
-
             <View style={styles.detailContent}>
-              <Text style={styles.detailLabel}>
-                Specialization
-              </Text>
-
-              <Text style={styles.detailValue}>
-                {counselor.specialization}
-              </Text>
+              <Text style={styles.detailLabel}>Specialization</Text>
+              <Text style={styles.detailValue}>{c.specialization}</Text>
             </View>
           </View>
-
         </View>
 
         {/* What They Can Help With */}
@@ -300,8 +291,17 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
 
-  profileIcon: {
-    fontSize: 55,
+  profileInitials: {
+    fontSize: 36,
+    fontWeight: '700',
+    color: '#EF806B',
+    letterSpacing: 1,
+  },
+
+  profileImage: {
+    width: 105,
+    height: 105,
+    borderRadius: 53,
   },
 
   name: {

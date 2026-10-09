@@ -101,6 +101,17 @@ const counselorSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    profileImage: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    bio: {
+      type: String,
+      trim: true,
+      maxlength: [500, 'Bio cannot exceed 500 characters'],
+      default: '',
+    },
   },
   {
     timestamps: true,

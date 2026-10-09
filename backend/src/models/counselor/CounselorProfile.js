@@ -22,7 +22,7 @@ const counselorProfileSchema = new mongoose.Schema(
     toJSON: {
       virtuals: true,
       transform: (doc, ret) => {
-        delete ret._id;
+        ret.id = ret._id;   // expose string _id as `id` for consistency
         return ret;
       },
     },

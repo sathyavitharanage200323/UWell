@@ -68,18 +68,106 @@ app.post('/api/auth/login', (req, res, next) => {
   return require('./src/controllers/student/authController').loginStudent(req, res, next);
 });
 
-// Student Profile & CRUD
-app.use('/api/student', require('./src/routes/student/studentRoutes'));
-
-// Mood: CRUD /api/student/mood
+// Mood: CRUD /api/student/mood  — must be before studentRoutes (:studentId wildcard)
 app.use('/api/student/mood', require('./src/routes/student/moodRoutes'));
 
-// Appointments: CRUD /api/student/appointments
+// Appointments: CRUD /api/student/appointments — must be before studentRoutes
 app.use('/api/student/appointments', require('./src/routes/student/appointmentRoutes'));
 
 // ─── Counselor Module Routes ──────────────────────────────────────────────────
 // Profile, stats, appointments, students, messages, availability & video session
 app.use('/api/counselor', require('./src/routes/counselor/counselorRoutes'));
+
+// Counselors: read-only list + availability for students
+app.use('/api/student/counselors', (() => {
+  const r = require('express').Router();
+  const { protect, authorise } = require('./src/middleware/auth');
+  const { getCounselors, getCounselorById } = require('./src/controllers/student/counselorController');
+  r.use(protect);
+  r.use(authorise('student'));
+  r.get('/', getCounselors);
+  r.get('/:id', getCounselorById);
+  return r;
+})());
+
+// Counselor availability readable by students (used for slot picker)
+app.use('/api/student/counselor-availability', (() => {
+  const r = require('express').Router();
+  const { protect, authorise } = require('./src/middleware/auth');
+  r.use(protect);
+  r.use(authorise('student'));
+  r.get('/', async (req, res) => {
+    try {
+      const CounselorAvailability = require('./src/models/counselor/CounselorAvailability');
+      const { counselorId } = req.query;
+
+      // If a specific counselorId is requested, try that first.
+      // Fall back to the shared 'c1' slots if no records exist for that ID.
+      let data = [];
+      if (counselorId) {
+        data = await CounselorAvailability.find({ counselorId: String(counselorId), active: true });
+        if (data.length === 0) {
+          // No per-counselor slots found — return shared c1 slots so screen is never empty
+          data = await CounselorAvailability.find({ counselorId: 'c1', active: true });
+        }
+      } else {
+        data = await CounselorAvailability.find({ active: true });
+      }
+
+      res.status(200).json({ success: true, data });
+    } catch (e) {
+      res.status(500).json({ success: false, message: 'Failed to fetch availability' });
+    }
+  });
+  return r;
+})());
+
+// Resources — static wellness content readable by authenticated students
+app.use('/api/student/resources', (() => {
+  const r = require('express').Router();
+  const { protect, authorise } = require('./src/middleware/auth');
+  r.use(protect);
+  r.use(authorise('student'));
+
+  const RESOURCES = [
+    { id: '1', title: 'Stress Management', category: 'Stress & Relaxation', description: 'Simple techniques to manage academic and everyday stress.' },
+    { id: '2', title: 'Better Sleep', category: 'Sleep & Rest', description: 'Helpful habits and tips for improving your sleep routine.' },
+    { id: '3', title: 'Deep Breathing', category: 'Relaxation', description: 'Practice simple breathing exercises to feel calmer.' },
+    { id: '4', title: 'Mental Health Tips', category: 'Mental Wellbeing', description: 'Learn simple ways to support your mental wellbeing.' },
+    { id: '5', title: 'Managing Academic Pressure', category: 'Student Life', description: 'Practical ideas for handling study pressure and workload.' },
+    { id: '6', title: 'Talk to Someone', category: 'Support', description: 'Understand when and how to reach out for emotional support.' },
+  ];
+
+  r.get('/', (req, res) => {
+    res.status(200).json({ success: true, count: RESOURCES.length, data: RESOURCES });
+  });
+
+  r.get('/:id', (req, res) => {
+    const item = RESOURCES.find(r => r.id === req.params.id);
+    if (!item) return res.status(404).json({ success: false, message: 'Resource not found' });
+    res.status(200).json({ success: true, data: item });
+  });
+
+  return r;
+})());
+
+// Consent — records student's privacy consent acknowledgement
+app.use('/api/student/consent', (() => {
+  const r = require('express').Router();
+  const { protect, authorise } = require('./src/middleware/auth');
+  r.use(protect);
+  r.use(authorise('student'));
+
+  r.post('/', (req, res) => {
+    // Consent is captured on the client; acknowledge receipt without persisting PII.
+    res.status(200).json({ success: true, message: 'Consent recorded' });
+  });
+
+  return r;
+})());
+
+// Student Profile & CRUD — registered last to avoid :studentId wildcard intercepting sub-paths
+app.use('/api/student', require('./src/routes/student/studentRoutes'));
 
 // ─── Global Error Handler ─────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
