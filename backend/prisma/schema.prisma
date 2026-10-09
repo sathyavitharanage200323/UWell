@@ -1,0 +1,110 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Counselor {
+  id               String         @id @default(cuid())
+  name             String
+  title            String
+  role             String         @default("CLINICAL STAFF")
+  rating           Float          @default(0)
+  sessionsReviewed Int            @default(0)
+  qualification    String
+  specialization   String
+  clinicalFocus    String         @default("")
+  officeLocation   String
+  email            String         @unique
+  avatarInitials   String         @default("EM")
+  bio              String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  appointments     Appointment[]
+  availability     Availability[]
+  messages         Message[]
+  students         Student[]
+}
+
+model Student {
+  id                  String        @id @default(cuid())
+  name                String
+  yearCourse          String
+  sessionsCompleted   Int           @default(0)
+  status              String        @default("Active")
+  avatarInitials      String
+  email               String        @unique
+  moodHistory         String        @default("")
+  diagnosisNotes      String?
+  sessionNotesHistory String?
+  counselorId         String
+  counselor           Counselor     @relation(fields: [counselorId], references: [id])
+  appointments        Appointment[]
+  messages            Message[]
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+}
+
+model Appointment {
+  id             String         @id @default(cuid())
+  studentId      String
+  student        Student        @relation(fields: [studentId], references: [id])
+  counselorId    String
+  counselor      Counselor      @relation(fields: [counselorId], references: [id])
+  studentName    String
+  studentCourse  String
+  sessionType    String
+  date           String
+  time           String
+  location       String
+  status         String         @default("Pending")
+  notes          String?
+  avatarInitials String
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  @@index([counselorId, date])
+}
+
+model Availability {
+  id          String   @id @default(cuid())
+  counselorId String
+  counselor   Counselor @relation(fields: [counselorId], references: [id])
+  day         String
+  active      Boolean  @default(true)
+  startTime   String
+  endTime     String
+  slots       String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@unique([counselorId, day])
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  studentId      String
+  student        Student  @relation(fields: [studentId], references: [id])
+  counselorId    String
+  counselor      Counselor @relation(fields: [counselorId], references: [id])
+  studentName    String
+  avatarInitials String
+  lastMessage    String
+  timestamp      String
+  unread         Boolean  @default(false)
+  chatHistory    String   @default("")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  @@index([counselorId, studentId])
+}
+
+model VideoSession {
+  id            String    @id @default(cuid())
+  appointmentId String
+  sessionId     String    @unique
+  status        String    @default("active")
+  joinUrl       String
+  startedAt     DateTime  @default(now())
+  endedAt       DateTime?
+}
