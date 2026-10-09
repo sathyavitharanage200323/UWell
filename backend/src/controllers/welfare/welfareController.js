@@ -299,21 +299,23 @@ exports.updateSchedule = async (req, res) => {
 // ── Get Counseling Services Overview (Counselors + Live Sessions) ────────────
 exports.getCounselingServices = async (req, res) => {
   try {
-    // 1. Fetch approved Counselors
-    const counselorsDoc = await Counselor.find({ isApproved: true }).sort({ firstName: 1 });
+    // 1. Fetch approved Counselors from database
+    const counselorsDoc = await Counselor.find({
+      $or: [{ isApproved: true }, { approvalStatus: 'approved' }],
+    }).sort({ firstName: 1 });
     const counselors = counselorsDoc.map((c) => ({
       id: c._id.toString(),
       _id: c._id.toString(),
       staffId: c.staffId,
-      name: `${c.firstName} ${c.lastName}`.trim(),
+      name: c.name || `${c.firstName || ''} ${c.lastName || ''}`.trim() || 'Counselor',
       firstName: c.firstName,
       lastName: c.lastName,
-      specialization: c.specialization,
-      qualification: c.qualification,
-      yearsOfExperience: c.yearsOfExperience,
+      specialization: c.specialization || 'Clinical Counseling',
+      qualification: c.qualification || '',
+      yearsOfExperience: c.yearsOfExperience || '',
       officeLocation: c.officeLocation || 'Main Welfare Centre',
-      phone: c.phone,
-      email: c.email,
+      phone: c.phone || '',
+      email: c.email || '',
       status: c.status || 'Available',
     }));
 
