@@ -9,12 +9,13 @@ import {
   Switch,
   Alert,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { useWelfare } from '../../context/WelfareContext';
 import { useAuth } from '../../context/AuthContext';
-import { welfareService } from '../../services/welfareService';
+import { welfareService, resolveProfileImageUrl } from '../../services/welfareService';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
@@ -549,9 +550,16 @@ const WorkScheduleScreen = ({ navigation }) => {
           <View style={styles.previewBadgeCard}>
             <View style={styles.previewTop}>
               <View style={styles.previewAvatar}>
-                <Text style={styles.previewAvatarText}>
-                  {officer.avatarInitials || 'WO'}
-                </Text>
+                {resolveProfileImageUrl(officer.profilePicture) ? (
+                  <Image
+                    source={{ uri: resolveProfileImageUrl(officer.profilePicture) }}
+                    style={styles.previewAvatarImage}
+                  />
+                ) : (
+                  <Text style={styles.previewAvatarText}>
+                    {officer.avatarInitials || 'WO'}
+                  </Text>
+                )}
               </View>
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <Text style={styles.previewOfficerName}>
@@ -983,6 +991,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#0D9488',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  previewAvatarImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
   },
   previewAvatarText: {
     color: '#FFFFFF',

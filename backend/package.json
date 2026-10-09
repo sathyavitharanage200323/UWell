@@ -20,7 +20,8 @@
     "dotenv": "^16.6.1",
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.24.5"
+    "mongoose": "^8.24.5",
+    "multer": "^2.4.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.4"

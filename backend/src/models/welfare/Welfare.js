@@ -56,6 +56,10 @@ const welfareSchema = new mongoose.Schema(
       trim: true,
       default: 'Dedicated to supporting university student wellbeing, mental health initiatives, and student advocacy.',
     },
+    profilePicture: {
+      type: String,
+      default: null,
+    },
     specializations: {
       type: [String],
       default: ['Student Wellbeing', 'Financial Aid Guidance', 'Housing Support', 'Crisis Intervention'],

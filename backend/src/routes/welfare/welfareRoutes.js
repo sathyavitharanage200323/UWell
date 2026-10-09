@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { protect, authorise } = require('../../middleware/auth');
+const upload = require('../../middleware/upload');
 const {
   getProfile,
   getByStaffId,
@@ -16,6 +17,8 @@ const {
   deleteWelfareAppointment,
   getMyNotifications,
   markNotificationRead,
+  uploadProfilePhoto,
+  deleteProfilePhoto,
 } = require('../../controllers/welfare/welfareController');
 
 // All routes below require valid JWT
@@ -42,6 +45,13 @@ router.route('/profile')
   .put(authorise('welfare'), updateProfile);
 
 /**
+ * POST   /api/welfare/profile/photo – upload profile photo
+ * DELETE /api/welfare/profile/photo – remove profile photo
+ */
+router.post('/profile/photo', authorise('welfare'), upload.single('photo'), uploadProfilePhoto);
+router.delete('/profile/photo', authorise('welfare'), deleteProfilePhoto);
+
+/**
  * PUT  /api/welfare/schedule – update working schedule & availability
  */
 router.put('/schedule', authorise('welfare'), updateSchedule);
@@ -52,14 +62,14 @@ router.put('/schedule', authorise('welfare'), updateSchedule);
 router.get('/dashboard', authorise('welfare'), getDashboard);
 
 /**
- * GET  /api/welfare/all – list all approved welfare officers (accessible by welfare, management)
+ * GET  /api/welfare/all – list all approved welfare officers (accessible by student, welfare, management)
  */
-router.get('/all', authorise('welfare', 'management'), getAllWelfareOfficers);
+router.get('/all', authorise('student', 'welfare', 'management'), getAllWelfareOfficers);
 
 /**
  * GET  /api/welfare/staff/:staffId – look up by unique staffId (e.g. STF01, WLF2024001)
  */
-router.get('/staff/:staffId', authorise('welfare', 'management'), getByStaffId);
+router.get('/staff/:staffId', authorise('student', 'welfare', 'management'), getByStaffId);
 
 /**
  * APPOINTMENTS

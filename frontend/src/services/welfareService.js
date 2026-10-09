@@ -1,4 +1,29 @@
 import api from './api';
+import { API_BASE_URL } from '../utils/constants';
+
+/**
+ * Resolves relative avatar paths (/uploads/...) to fully qualified URLs.
+ * Handles data URIs, local file URIs, remote web URLs, and relative paths.
+ */
+export const resolveProfileImageUrl = (url) => {
+  if (!url || typeof url !== 'string') return null;
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+
+  if (
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('data:image') ||
+    trimmed.startsWith('file://')
+  ) {
+    return trimmed;
+  }
+
+  // Relative path on server (e.g., /uploads/welfare-photos/...)
+  const serverOrigin = (API_BASE_URL || 'http://192.168.1.12:8082/api').replace(/\/api\/?$/, '');
+  const cleanPath = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  return `${serverOrigin}${cleanPath}`;
+};
 
 export const welfareService = {
   // ── Profile ───────────────────────────────────────────────────────────────
@@ -12,6 +37,22 @@ export const welfareService = {
     return response.data;
   },
 
+  uploadProfilePhoto: async (formDataOrData) => {
+    if (formDataOrData instanceof FormData) {
+      const response = await api.post('/welfare/profile/photo', formDataOrData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return response.data;
+    }
+    const response = await api.post('/welfare/profile/photo', formDataOrData);
+    return response.data;
+  },
+
+  deleteProfilePhoto: async () => {
+    const response = await api.delete('/welfare/profile/photo');
+    return response.data;
+  },
+
   // ── Schedule ──────────────────────────────────────────────────────────────
   updateSchedule: async (scheduleData) => {
     const response = await api.put('/welfare/schedule', scheduleData);
@@ -21,6 +62,11 @@ export const welfareService = {
   // ── Staff Lookup ──────────────────────────────────────────────────────────
   getByStaffId: async (staffId) => {
     const response = await api.get(`/welfare/staff/${encodeURIComponent(staffId)}`);
+    return response.data;
+  },
+
+  getAllOfficers: async () => {
+    const response = await api.get('/welfare/all');
     return response.data;
   },
 
@@ -73,4 +119,3 @@ export const welfareService = {
     return response.data;
   },
 };
-

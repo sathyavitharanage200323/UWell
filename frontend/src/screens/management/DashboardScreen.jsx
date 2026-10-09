@@ -8,12 +8,14 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+  Image,
 } from 'react-native';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '../../theme';
 import NavigationHeader from '../../components/navigation/Header';
 import { authService } from '../../services/authService';
 import { useAuth } from '../../context/AuthContext';
+import { resolveProfileImageUrl } from '../../services/welfareService';
 
 export default function DashboardScreen({ navigation }) {
   const { logout } = useAuth();
@@ -157,7 +159,7 @@ export default function DashboardScreen({ navigation }) {
           onPress: async () => {
             try {
               await authService.logout();
-            } catch (e) {}
+            } catch (e) { }
             if (logout) {
               await logout();
             }
@@ -323,7 +325,20 @@ export default function DashboardScreen({ navigation }) {
               <View key={item.id} style={styles.requestCard}>
                 {/* Card Top: Name, Badge, Date */}
                 <View style={styles.cardTopRow}>
-                  <View style={{ flex: 1 }}>
+                  <View style={styles.applicantAvatarBox}>
+                    {resolveProfileImageUrl(item.profilePicture) ? (
+                      <Image
+                        source={{ uri: resolveProfileImageUrl(item.profilePicture) }}
+                        style={styles.applicantAvatarImg}
+                      />
+                    ) : (
+                      <Text style={styles.applicantAvatarInitials}>
+                        {((item.firstName || '')[0] || 'U') + ((item.lastName || '')[0] || '')}
+                      </Text>
+                    )}
+                  </View>
+
+                  <View style={{ flex: 1, marginLeft: 12 }}>
                     <Text style={styles.applicantName}>{item.fullName}</Text>
                     <View style={styles.badgeRow}>
                       <View
@@ -700,6 +715,27 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 12,
+  },
+  applicantAvatarBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#F3EEFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: '#E8DDD7',
+  },
+  applicantAvatarImg: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+  },
+  applicantAvatarInitials: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.primary,
   },
   applicantName: {
     fontSize: 17,

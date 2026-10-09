@@ -3,6 +3,8 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const connectDB = require('./src/config/db');
 
+const path = require('path');
+
 dotenv.config();
 
 process.on('uncaughtException', (err) => {
@@ -17,10 +19,12 @@ connectDB();
 
 const app = express();
 
-
 app.use(cors({ origin: process.env.CLIENT_URL || '*' }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// ─── Static Files for Uploads ───────────────────────────────────────────────
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ─── Request Logger Middleware ───────────────────────────────────────────────
 app.use((req, res, next) => {

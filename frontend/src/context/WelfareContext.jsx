@@ -60,6 +60,7 @@ export const WelfareProvider = ({ children }) => {
     consultationMode: u.consultationMode || 'In-Person & Online',
     emergencyAvailable: u.emergencyAvailable !== undefined ? !!u.emergencyAvailable : true,
     availabilityNote: u.availabilityNote || '',
+    profilePicture: u.profilePicture || null,
     avatarInitials: `${(u.firstName || 'W')[0] || 'W'}${(u.lastName || 'O')[0] || 'O'}`.toUpperCase(),
   });
 
@@ -72,7 +73,7 @@ export const WelfareProvider = ({ children }) => {
     if (authUser && (authUser.role === 'welfare' || authUser.staffId)) {
       const realProfile = buildProfileFromAuth(authUser);
       setProfile(realProfile);
-      AsyncStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(realProfile)).catch(() => {});
+      AsyncStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(realProfile)).catch(() => { });
 
       // Fetch fresh profile from backend if online
       welfareService.getProfile()
@@ -80,10 +81,10 @@ export const WelfareProvider = ({ children }) => {
           if (res?.user) {
             const synced = buildProfileFromAuth(res.user);
             setProfile(synced);
-            AsyncStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(synced)).catch(() => {});
+            AsyncStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(synced)).catch(() => { });
           }
         })
-        .catch(() => {});
+        .catch(() => { });
     }
   }, [authUser]);
 
@@ -242,9 +243,38 @@ export const WelfareProvider = ({ children }) => {
     setProfile(updated);
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(updated));
-      await welfareService.updateProfile(changes).catch(() => {});
+      await welfareService.updateProfile(changes).catch(() => { });
     } catch (error) {
       console.error('updateProfile error:', error);
+    }
+  };
+
+  const uploadProfilePhoto = async (photoData) => {
+    try {
+      const res = await welfareService.uploadProfilePhoto(photoData);
+      const newPic = res?.profilePicture || res?.user?.profilePicture;
+      if (newPic) {
+        const updated = { ...profile, profilePicture: newPic };
+        setProfile(updated);
+        await AsyncStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(updated));
+      }
+      return res;
+    } catch (error) {
+      console.error('uploadProfilePhoto context error:', error);
+      throw error;
+    }
+  };
+
+  const removeProfilePhoto = async () => {
+    try {
+      const res = await welfareService.deleteProfilePhoto();
+      const updated = { ...profile, profilePicture: null };
+      setProfile(updated);
+      await AsyncStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(updated));
+      return res;
+    } catch (error) {
+      console.error('removeProfilePhoto context error:', error);
+      throw error;
     }
   };
 
@@ -318,6 +348,8 @@ export const WelfareProvider = ({ children }) => {
 
     // Profile (UPDATE)
     updateProfile,
+    uploadProfilePhoto,
+    removeProfilePhoto,
 
     // Schedule & Availability (UPDATE)
     updateSchedule,

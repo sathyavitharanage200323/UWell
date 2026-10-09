@@ -1,3 +1,5 @@
+const path = require('path');
+const fs = require('fs');
 const Welfare = require('../../models/welfare/Welfare');
 const Counselor = require('../../models/counselor/Counselor');
 const Appointment = require('../../models/counselor/Appointment');
@@ -122,6 +124,7 @@ exports.updateProfile = async (req, res) => {
     if (consultationMode !== undefined) welfare.consultationMode = consultationMode.trim();
     if (emergencyAvailable !== undefined) welfare.emergencyAvailable = Boolean(emergencyAvailable);
     if (availabilityNote !== undefined) welfare.availabilityNote = availabilityNote.trim();
+    if (req.body.profilePicture !== undefined) welfare.profilePicture = req.body.profilePicture;
 
     await welfare.save();
 
@@ -173,7 +176,7 @@ exports.getDashboard = async (req, res) => {
         .populate('student', 'firstName lastName studentId')
         .populate('counselor', 'firstName lastName specialization')
         .sort({ createdAt: -1 })
-        .limit(10),
+        .limit(30),
     ]);
 
     // Format today's service activity
@@ -672,5 +675,82 @@ exports.markNotificationRead = async (req, res) => {
   } catch (error) {
     console.error('❌ markNotificationRead error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// ── Upload Welfare Officer Profile Photo ──────────────────────────────────────
+exports.uploadProfilePhoto = async (req, res) => {
+  try {
+    const welfareId = req.user?.id;
+    const welfare = await Welfare.findById(welfareId);
+    if (!welfare) {
+      return res.status(404).json({ success: false, message: 'Welfare officer not found' });
+    }
+
+    let photoUrl = null;
+
+    if (req.file) {
+      photoUrl = `/uploads/welfare-photos/${req.file.filename}`;
+    } else if (req.body.profilePicture || req.body.base64) {
+      const rawData = req.body.profilePicture || req.body.base64;
+      if (typeof rawData === 'string' && rawData.startsWith('data:image')) {
+        const matches = rawData.match(/^data:([A-Za-z-+/]+);base64,(.+)$/);
+        if (matches && matches.length === 3) {
+          const ext = matches[1].split('/')[1] || 'jpg';
+          const buffer = Buffer.from(matches[2], 'base64');
+          const uploadDir = path.join(__dirname, '../../../uploads/welfare-photos');
+          if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+          }
+          const filename = `welfare-${Date.now()}-${Math.round(Math.random() * 1e9)}.${ext}`;
+          fs.writeFileSync(path.join(uploadDir, filename), buffer);
+          photoUrl = `/uploads/welfare-photos/${filename}`;
+        } else {
+          photoUrl = rawData;
+        }
+      } else {
+        photoUrl = rawData;
+      }
+    }
+
+    if (!photoUrl) {
+      return res.status(400).json({ success: false, message: 'No photo provided in request' });
+    }
+
+    welfare.profilePicture = photoUrl;
+    await welfare.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Profile photo uploaded successfully',
+      profilePicture: photoUrl,
+      user: welfare.toSafeObject(),
+    });
+  } catch (error) {
+    console.error('❌ uploadProfilePhoto error:', error);
+    res.status(500).json({ success: false, message: error.message || 'Server error uploading photo' });
+  }
+};
+
+// ── Delete Welfare Officer Profile Photo ──────────────────────────────────────
+exports.deleteProfilePhoto = async (req, res) => {
+  try {
+    const welfareId = req.user?.id;
+    const welfare = await Welfare.findById(welfareId);
+    if (!welfare) {
+      return res.status(404).json({ success: false, message: 'Welfare officer not found' });
+    }
+
+    welfare.profilePicture = null;
+    await welfare.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Profile photo removed successfully',
+      user: welfare.toSafeObject(),
+    });
+  } catch (error) {
+    console.error('❌ deleteProfilePhoto error:', error);
+    res.status(500).json({ success: false, message: error.message || 'Server error removing photo' });
   }
 };
