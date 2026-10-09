@@ -10,7 +10,7 @@ const moodCheckSchema = new mongoose.Schema(
     mood: {
       type: String,
       required: [true, 'Mood is required'],
-      enum: ['Very Good', 'Good', 'Okay', 'Low', 'Very Low'],
+      trim: true,
     },
     notes: {
       type: String,

@@ -68,18 +68,22 @@ app.post('/api/auth/login', (req, res, next) => {
   return require('./src/controllers/student/authController').loginStudent(req, res, next);
 });
 
-// Student Profile & CRUD
-app.use('/api/student', require('./src/routes/student/studentRoutes'));
-
 // Mood: CRUD /api/student/mood
 app.use('/api/student/mood', require('./src/routes/student/moodRoutes'));
 
 // Appointments: CRUD /api/student/appointments
 app.use('/api/student/appointments', require('./src/routes/student/appointmentRoutes'));
 
+// Student Profile, Counselors list & CRUD /api/student
+app.use('/api/student', require('./src/routes/student/studentRoutes'));
+
 // ─── Counselor Module Routes ──────────────────────────────────────────────────
 // Profile, stats, appointments, students, messages, availability & video session
 app.use('/api/counselor', require('./src/routes/counselor/counselorRoutes'));
+
+// ─── Welfare Officer Module Routes ───────────────────────────────────────────
+// Profile, dashboard stats, appointments, counseling services, working schedule
+app.use('/api/welfare', require('./src/routes/welfare/welfareRoutes'));
 
 // ─── Global Error Handler ─────────────────────────────────────────────────────
 app.use((err, req, res, next) => {

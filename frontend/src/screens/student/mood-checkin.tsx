@@ -33,16 +33,17 @@ function formatMoodDate(entry: MoodEntry) {
 }
 
 function moodEmoji(mood: string) {
-  switch (mood) {
-    case 'Very Good':
+  const m = (mood || '').trim().toLowerCase();
+  switch (m) {
+    case 'very good':
       return '😄';
-    case 'Good':
+    case 'good':
       return '🙂';
-    case 'Okay':
+    case 'okay':
       return '😐';
-    case 'Low':
+    case 'low':
       return '😔';
-    case 'Very Low':
+    case 'very low':
       return '😢';
     default:
       return '💭';
@@ -469,7 +470,7 @@ export default function MoodCheckInScreen() {
     try {
       await studentService.createMood(selectedMood);
       loadMoodHistory();
-    } catch (e) {
+    } catch (e: any) {
       // silently fail — app works offline too
       console.log('[Mood] Backend save failed, continuing offline:', e?.message);
     }
@@ -729,8 +730,8 @@ export default function MoodCheckInScreen() {
                 No check-ins yet. Your mood history will appear here after your first entry.
               </Text>
             ) : (
-              moodHistory.slice(0, 10).map((entry) => (
-                <View key={entry._id || `${entry.mood}-${entry.createdAt}`} style={styles.historyRow}>
+              moodHistory.slice(0, 10).map((entry, index) => (
+                <View key={entry._id || `${entry.mood}-${entry.createdAt || entry.date || index}-${index}`} style={styles.historyRow}>
                   <Text style={styles.historyEmoji}>{moodEmoji(entry.mood)}</Text>
                   <View style={styles.historyContent}>
                     <Text style={styles.historyMood}>{entry.mood}</Text>

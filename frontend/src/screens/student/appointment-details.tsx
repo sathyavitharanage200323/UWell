@@ -134,7 +134,17 @@ export default function AppointmentDetailsScreen() {
               Alert.alert(
                 'Appointment Cancelled',
                 'Your appointment has been cancelled.',
-                [{ text: 'OK', onPress: () => navigation.getParent()?.navigate('Sessions') }],
+                [{
+                  text: 'OK',
+                  onPress: () => {
+                    const parent = navigation.getParent();
+                    if (parent) {
+                      parent.navigate('Sessions');
+                    } else if (navigation.canGoBack()) {
+                      navigation.goBack();
+                    }
+                  },
+                }],
               );
             } catch (err: any) {
               Alert.alert('Error', err?.response?.data?.message || 'Could not cancel. Try again.');
@@ -150,7 +160,7 @@ export default function AppointmentDetailsScreen() {
   const handleReschedule = () => {
     if (!appointmentId) return;
     navigation.navigate('Availability', {
-      counselorId: 1,
+      counselorId: appointment?.counselorId || appointment?.counselor?._id || appointment?.counselor || 1,
       appointmentId,
       counselorName: appointment?.counselorName || 'Dr. Sarah Perera',
     });

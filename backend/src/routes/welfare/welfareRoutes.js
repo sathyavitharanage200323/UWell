@@ -84,6 +84,12 @@ router.put('/notifications/:id/read', markNotificationRead);
 /**
  * GET  /api/welfare/:staffId – direct alias by staffId (must be LAST to avoid conflicts)
  */
-router.get('/:staffId', authorise('welfare', 'management'), getByStaffId);
+router.get('/:staffId', authorise('welfare', 'management'), (req, res, next) => {
+  const reserved = ['profile', 'dashboard', 'services', 'counselor', 'schedule', 'all', 'appointments', 'notifications'];
+  if (reserved.includes(req.params.staffId.toLowerCase())) {
+    return next();
+  }
+  return getByStaffId(req, res, next);
+});
 
 module.exports = router;

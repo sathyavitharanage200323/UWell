@@ -154,7 +154,7 @@ export default function BookingConfirmationScreen() {
             styles.primaryButton,
             pressed && styles.buttonPressed,
           ]}
-          onPress={() => navigation.navigate('AppointmentDetails', { appointmentId: route.params?.appointmentId || '' })}
+          onPress={() => navigation.navigate('AppointmentDetails', { appointmentId: (route.params as any)?.appointmentId || '' })}
         >
           <Text style={styles.primaryButtonText}>
             View Appointment

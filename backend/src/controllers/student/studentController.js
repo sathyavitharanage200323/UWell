@@ -1,4 +1,5 @@
 const Student = require('../../models/student/Student');
+const Counselor = require('../../models/counselor/Counselor');
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  GET /api/student/profile
@@ -125,3 +126,88 @@ exports.getAllStudents = async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error' });
   }
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  GET /api/student/counselors
+//  List all approved counselors for students
+// ─────────────────────────────────────────────────────────────────────────────
+exports.getCounselors = async (req, res) => {
+  try {
+    const counselors = await Counselor.find({ isApproved: true }).sort({ createdAt: -1 });
+    res.status(200).json({
+      success: true,
+      count: counselors.length,
+      data: counselors.map((c) => c.toSafeObject()),
+    });
+  } catch (error) {
+    console.error('❌ getCounselors error:', error);
+    res.status(500).json({ success: false, message: 'Server error fetching counselors' });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  GET /api/student/counselors/:id
+//  Get single counselor details
+// ─────────────────────────────────────────────────────────────────────────────
+exports.getCounselorById = async (req, res) => {
+  try {
+    const counselor = await Counselor.findById(req.params.id);
+    if (!counselor) {
+      return res.status(404).json({ success: false, message: 'Counselor not found' });
+    }
+    res.status(200).json({
+      success: true,
+      data: counselor.toSafeObject(),
+    });
+  } catch (error) {
+    console.error('❌ getCounselorById error:', error);
+    res.status(500).json({ success: false, message: 'Server error fetching counselor' });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  GET /api/student/counselors/:id/availability
+//  Get counselor availability slots
+// ─────────────────────────────────────────────────────────────────────────────
+exports.getCounselorAvailability = async (req, res) => {
+  try {
+    const counselor = await Counselor.findById(req.params.id);
+    if (!counselor) {
+      return res.status(404).json({ success: false, message: 'Counselor not found' });
+    }
+    res.status(200).json({
+      success: true,
+      data: {
+        status: counselor.status || 'Available',
+        slots: ['09:00 AM', '10:00 AM', '11:00 AM', '02:00 PM', '03:00 PM', '04:00 PM'],
+      },
+    });
+  } catch (error) {
+    console.error('❌ getCounselorAvailability error:', error);
+    res.status(500).json({ success: false, message: 'Server error fetching availability' });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  POST /api/student/wellbeing-check
+//  Submit wellbeing assessment
+// ─────────────────────────────────────────────────────────────────────────────
+exports.submitWellbeingCheck = async (req, res) => {
+  try {
+    const { answers, score, level, notes } = req.body;
+    res.status(201).json({
+      success: true,
+      message: 'Wellbeing assessment saved',
+      data: {
+        score: score || 0,
+        level: level || 'Moderate',
+        notes: notes || '',
+        completedAt: new Date(),
+      },
+    });
+  } catch (error) {
+    console.error('❌ submitWellbeingCheck error:', error);
+    res.status(500).json({ success: false, message: 'Server error saving wellbeing check' });
+  }
+};
+

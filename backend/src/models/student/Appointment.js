@@ -7,6 +7,15 @@ const appointmentSchema = new mongoose.Schema(
       ref: 'Student',
       required: true,
     },
+    studentName: {
+      type: String,
+      default: '',
+    },
+    counselor: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Counselor',
+      default: null,
+    },
     counselorName: {
       type: String,
       required: [true, 'Counselor name is required'],
@@ -26,7 +35,7 @@ const appointmentSchema = new mongoose.Schema(
     },
     sessionType: {
       type: String,
-      enum: ['Online', 'In Person'],
+      enum: ['Online', 'In Person', 'Phone'],
       default: 'Online',
     },
     notes: {
@@ -36,11 +45,10 @@ const appointmentSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['upcoming', 'completed', 'cancelled'],
       default: 'upcoming',
     },
   },
   { timestamps: true }
 );
 
-module.exports = mongoose.model('Appointment', appointmentSchema);
+module.exports = mongoose.models.Appointment || mongoose.model('Appointment', appointmentSchema, 'appointments');
