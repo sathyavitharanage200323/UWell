@@ -359,17 +359,10 @@ export default function ResourceDetailsScreen() {
   const slideAnim =
     useRef(new Animated.Value(15)).current;
 
- // Calm ambient breathing music — always loaded, only plays during breathing activity
+ // Calm ambient breathing music — local asset
  const breathingPlayer = useAudioPlayer(
-   { uri: 'https://cdn.pixabay.com/audio/2022/03/15/audio_d86fd5aad4.mp3' }
+   require('../../assets/breathing-music.mp3')
  );
-
- // Set looping so music plays continuously during breathing
- useEffect(() => {
-   if (breathingPlayer) {
-     breathingPlayer.loop = true;
-   }
- }, [breathingPlayer]);
 
   useEffect(() => {
     Animated.parallel([
@@ -478,6 +471,7 @@ export default function ResourceDetailsScreen() {
       }).start();
 
       breathingPlayer.seekTo(0);
+      breathingPlayer.loop = true;
       breathingPlayer.play();
     }
 
