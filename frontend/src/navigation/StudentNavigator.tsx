@@ -94,24 +94,16 @@ const ProfileStackScreen = () => (
 const StudentNavigator = () => {
   return (
     <Tab.Navigator
-      screenOptions={({ route }) => {
-        const icons: Record<string, string> = {
-          Home: '🏠',
-          Mood: '😊',
-          Counselors: '👥',
-          Sessions: '📅',
-          Resources: '📚',
-          Profile: '👤',
-        };
-        return tabScreenOptions(icons[route.name] || '🏠');
-      }}
+      screenOptions={({ route }) => ({
+        ...tabScreenOptions('', route.name),
+      })}
     >
-      <Tab.Screen name="Home" component={HomeStackScreen} />
-      <Tab.Screen name="Mood" component={MoodStackScreen} />
-      <Tab.Screen name="Counselors" component={CounselorsStackScreen} />
-      <Tab.Screen name="Sessions" component={SessionsStackScreen} />
-      <Tab.Screen name="Resources" component={ResourcesStackScreen} />
-      <Tab.Screen name="Profile" component={ProfileStackScreen} />
+      <Tab.Screen name="Home"       component={HomeStackScreen}      options={{ tabBarLabel: 'Home' }} />
+      <Tab.Screen name="Mood"       component={MoodStackScreen}      options={{ tabBarLabel: 'Check-In' }} />
+      <Tab.Screen name="Counselors" component={CounselorsStackScreen} options={{ tabBarLabel: 'Counselors' }} />
+      <Tab.Screen name="Sessions"   component={SessionsStackScreen}  options={{ tabBarLabel: 'Sessions' }} />
+      <Tab.Screen name="Resources"  component={ResourcesStackScreen} options={{ tabBarLabel: 'Resources' }} />
+      <Tab.Screen name="Profile"    component={ProfileStackScreen}   options={{ tabBarLabel: 'Profile' }} />
     </Tab.Navigator>
   );
 };
