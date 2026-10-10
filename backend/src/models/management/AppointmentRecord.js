@@ -11,6 +11,7 @@ const appointmentRecordSchema = new mongoose.Schema(
   {
     student: { type: mongoose.Schema.Types.ObjectId, ref: 'Student' },
     studentName: { type: String, default: '' },
+    counselor: { type: mongoose.Schema.Types.ObjectId, ref: 'Counselor', default: null },
     counselorName: { type: String, default: '' },
     counselorSpecialization: { type: String, default: 'Student Counselling' },
     date: { type: String, default: '' },

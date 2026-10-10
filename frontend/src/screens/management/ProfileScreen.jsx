@@ -1,127 +1,141 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Alert,
-  TouchableOpacity,
-  ActivityIndicator,
-  TextInput,
-  Platform,
-} from 'react-native';
-import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { colors, spacing, typography } from '../../theme';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, TextInput } from 'react-native';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { colors } from '../../theme';
 import NavigationHeader from '../../components/navigation/Header';
 import { useAuth } from '../../context/AuthContext';
 import { authService } from '../../services/authService';
+import ConfirmModal from '../../components/management/ConfirmModal';
+import useSessionGuard from '../../components/management/useSessionGuard';
+import {
+  ResponsiveScroll,
+  SectionCard,
+  Banner,
+  LoadingState,
+  ActionButton,
+  useLayout,
+  PAGE_BACKGROUND,
+} from '../../components/management/ManagementUI';
 
-const ProfileScreen = ({ navigation }) => {
+const PHONE_PATTERN = /^\+?[\d\s\-()]{7,20}$/;
+
+/** Labelled text box; `locked` shows the value read-only with a padlock. */
+const Field = ({ label, value, onChangeText, placeholder, locked, keyboardType, error }) => (
+  <View style={styles.field}>
+    <Text style={styles.fieldLabel}>{label}</Text>
+    <View style={[styles.inputWrap, locked && styles.inputLocked, !!error && styles.inputError]}>
+      <TextInput
+        style={[styles.input, locked && styles.inputLockedText]}
+        value={value}
+        onChangeText={onChangeText}
+        editable={!locked}
+        placeholder={placeholder}
+        placeholderTextColor={colors.textMuted}
+        keyboardType={keyboardType}
+        accessibilityLabel={label}
+      />
+      {locked ? <Feather name="lock" size={14} color={colors.textMuted} /> : null}
+    </View>
+    {error ? <Text style={styles.fieldError}>{error}</Text> : null}
+  </View>
+);
+
+const ProfileScreen = () => {
   const { user, logout, updateUser } = useAuth();
+  const handleError = useSessionGuard();
+  const { isWide } = useLayout();
 
   const [profile, setProfile] = useState({
-    firstName: user?.firstName || 'Admin',
-    lastName: user?.lastName || 'Manager',
-    email: user?.email || 'admin@university.edu',
-    employeeId: user?.employeeId || 'ADM001',
+    firstName: user?.firstName || '',
+    lastName: user?.lastName || '',
+    email: user?.email || '',
+    employeeId: user?.employeeId || '',
     phone: user?.phone || '',
-    role: 'management',
-    department: user?.department || 'Administration',
-    position: user?.position || 'System Administrator',
+    department: user?.department || '',
+    position: user?.position || '',
   });
-
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState(null);
+  const [errors, setErrors] = useState({});
+  const [confirmLogout, setConfirmLogout] = useState(false);
 
-  useEffect(() => {
-    fetchProfile();
-  }, [user]);
+  const showFeedback = (type, message) => {
+    setFeedback({ type, message });
+    setTimeout(() => setFeedback(null), 5000);
+  };
 
-  const fetchProfile = async () => {
+  const fetchProfile = useCallback(async () => {
     try {
-      setLoading(true);
-      const res = await authService.getManagementProfile({
-        id: user?.id || user?._id,
-        email: user?.email,
-      });
+      const res = await authService.getManagementProfile();
       if (res.success && res.profile) {
-        setProfile((prev) => ({
-          ...prev,
-          ...res.profile,
-          firstName: res.profile.firstName || prev.firstName,
-          lastName: res.profile.lastName || prev.lastName,
-          email: res.profile.email || prev.email,
-          employeeId: res.profile.employeeId || prev.employeeId,
-          phone: res.profile.phone || prev.phone,
-          department: res.profile.department || prev.department,
-          position: res.profile.position || prev.position,
-        }));
+        const p = res.profile;
+        setProfile({
+          firstName: p.firstName || '',
+          lastName: p.lastName || '',
+          email: p.email || '',
+          employeeId: p.employeeId || '',
+          phone: p.phone || '',
+          department: p.department || '',
+          position: p.position || '',
+        });
+      } else if (res.error) {
+        showFeedback('error', 'Could not load your profile. Showing saved details.');
       }
     } catch (err) {
-      console.log('Error fetching manager profile:', err);
+      showFeedback('error', handleError(err, 'Could not load your profile.'));
     } finally {
       setLoading(false);
     }
+  }, [handleError]);
+
+  // Load once; saving updates the screen directly, so no refetch loop
+  useEffect(() => { fetchProfile(); }, [fetchProfile]);
+
+  const setField = (key) => (value) => {
+    setProfile((p) => ({ ...p, [key]: value }));
+    if (errors[key]) setErrors((e) => ({ ...e, [key]: undefined }));
+  };
+
+  const validate = () => {
+    const next = {};
+    if (!profile.firstName.trim()) next.firstName = 'First name is required.';
+    if (!profile.lastName.trim()) next.lastName = 'Last name is required.';
+    if (profile.phone.trim() && !PHONE_PATTERN.test(profile.phone.trim())) {
+      next.phone = 'Enter a valid phone number (7 to 20 digits, spaces, dashes or +).';
+    }
+    setErrors(next);
+    return Object.keys(next).length === 0;
   };
 
   const handleSave = async () => {
-    if (!profile.firstName?.trim() || !profile.lastName?.trim()) {
-      Alert.alert('Validation Error', 'First name and Last name are required.');
-      return;
-    }
-
+    if (!validate()) return;
+    setSaving(true);
     try {
-      setSaving(true);
-      setFeedback(null);
       const res = await authService.updateManagementProfile({
-        id: user?.id || user?._id,
-        email: profile.email,
         firstName: profile.firstName.trim(),
         lastName: profile.lastName.trim(),
         phone: profile.phone.trim(),
         department: profile.department.trim(),
         position: profile.position.trim(),
       });
-
       if (res.success) {
-        if (updateUser && res.profile) {
-          updateUser(res.profile);
-        }
-        setFeedback({ type: 'success', message: 'Profile updated successfully!' });
-        setTimeout(() => setFeedback(null), 4000);
+        if (updateUser && res.profile) updateUser(res.profile);
+        showFeedback('success', 'Profile updated successfully.');
       } else {
-        Alert.alert('Update Failed', res.message || 'Could not save profile changes.');
+        showFeedback('error', res.message || 'Could not save profile changes.');
       }
-    } catch (error) {
-      Alert.alert('Error', error.response?.data?.message || error.message || 'Failed to update profile.');
+    } catch (err) {
+      showFeedback('error', handleError(err, 'Could not save profile changes.'));
     } finally {
       setSaving(false);
     }
   };
 
-  const handleLogout = () => {
-    Alert.alert(
-      'Log Out',
-      'Are you sure you want to log out of your Management account?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Log Out',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await authService.logout();
-            } catch (e) {
-              // Ignore network logout error
-            }
-            if (logout) {
-              await logout();
-            }
-          },
-        },
-      ]
-    );
+  const handleLogout = async () => {
+    try { await authService.logout(); } catch (e) { /* local sign-out is enough */ }
+    setConfirmLogout(false);
+    if (logout) await logout();
   };
 
   const initials = `${(profile.firstName || 'A')[0]}${(profile.lastName || 'M')[0]}`.toUpperCase();
@@ -130,207 +144,78 @@ const ProfileScreen = ({ navigation }) => {
     <View style={styles.container}>
       <NavigationHeader title="Management Profile" />
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* ── Avatar Header Card ────────────────────────────────────── */}
-        <View style={styles.avatarCard}>
-          <View style={styles.avatarCircle}>
-            <Text style={styles.avatarText}>{initials}</Text>
-          </View>
-          <Text style={styles.profileName}>
-            {profile.firstName} {profile.lastName}
-          </Text>
-          <View style={styles.roleBadge}>
-            <MaterialCommunityIcons name="shield-crown" size={14} color="#B45309" style={{ marginRight: 4 }} />
-            <Text style={styles.roleBadgeText}>ADMINISTRATOR / MANAGER</Text>
-          </View>
-          <Text style={styles.profileEmail}>{profile.email}</Text>
-        </View>
+      <ResponsiveScroll>
+        {loading ? (
+          <LoadingState text="Loading your profile..." />
+        ) : (
+          <>
+            <View style={styles.avatarCard}>
+              <View style={styles.avatarCircle}>
+                <Text style={styles.avatarText}>{initials}</Text>
+              </View>
+              <Text style={styles.profileName}>{profile.firstName} {profile.lastName}</Text>
+              <View style={styles.roleBadge}>
+                <MaterialCommunityIcons name="shield-crown" size={14} color="#B45309" style={{ marginRight: 4 }} />
+                <Text style={styles.roleBadgeText}>Administrator / Manager</Text>
+              </View>
+              <Text style={styles.profileEmail}>{profile.email}</Text>
+            </View>
 
-        {/* ── Feedback Message ──────────────────────────────────────── */}
-        {feedback && (
-          <View style={[styles.feedbackBox, feedback.type === 'success' ? styles.feedbackSuccess : styles.feedbackError]}>
-            <Feather
-              name={feedback.type === 'success' ? 'check-circle' : 'alert-circle'}
-              size={16}
-              color={feedback.type === 'success' ? '#065F46' : '#991B1B'}
-              style={{ marginRight: 6 }}
+            {feedback ? <Banner type={feedback.type} message={feedback.message} /> : null}
+
+            <View style={isWide ? styles.twoColumn : null}>
+              <View style={isWide ? styles.column : null}>
+                <SectionCard title="Personal details" icon="user" iconTone="info">
+                  <Field label="First name" value={profile.firstName} onChangeText={setField('firstName')} placeholder="First name" error={errors.firstName} />
+                  <Field label="Last name" value={profile.lastName} onChangeText={setField('lastName')} placeholder="Last name" error={errors.lastName} />
+                  <Field label="Phone number" value={profile.phone} onChangeText={setField('phone')} placeholder="e.g. +94 77 123 4567" keyboardType="phone-pad" error={errors.phone} />
+                </SectionCard>
+              </View>
+              <View style={isWide ? styles.column : null}>
+                <SectionCard title="Role and organization" icon="briefcase" iconTone="warning">
+                  <Field label="Employee ID" value={profile.employeeId} locked />
+                  <Field label="Official email" value={profile.email} locked />
+                  <Field label="Department" value={profile.department} onChangeText={setField('department')} placeholder="Department" />
+                  <Field label="Position / title" value={profile.position} onChangeText={setField('position')} placeholder="Position" />
+                </SectionCard>
+              </View>
+            </View>
+
+            <ActionButton title="Save profile changes" icon="check" loading={saving} onPress={handleSave} />
+            <ActionButton
+              title="Log out"
+              icon="log-out"
+              variant="danger"
+              onPress={() => setConfirmLogout(true)}
+              style={styles.logoutBtn}
             />
-            <Text style={[styles.feedbackText, feedback.type === 'success' ? styles.feedbackSuccessText : styles.feedbackErrorText]}>
-              {feedback.message}
-            </Text>
-          </View>
+          </>
         )}
+      </ResponsiveScroll>
 
-        {/* ── Personal Info Section ─────────────────────────────────── */}
-        <View style={styles.sectionCard}>
-          <View style={styles.sectionHeader}>
-            <View style={[styles.iconCircle, { backgroundColor: '#EEF2FF' }]}>
-              <Feather name="user" size={16} color="#4F46E5" />
-            </View>
-            <Text style={styles.sectionTitle}>Personal Details</Text>
-          </View>
-
-          <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>First Name</Text>
-            <View style={styles.inputWrap}>
-              <TextInput
-                style={styles.input}
-                value={profile.firstName}
-                onChangeText={(v) => setProfile({ ...profile, firstName: v })}
-                placeholder="First Name"
-                placeholderTextColor={colors.textMuted}
-              />
-            </View>
-          </View>
-
-          <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>Last Name</Text>
-            <View style={styles.inputWrap}>
-              <TextInput
-                style={styles.input}
-                value={profile.lastName}
-                onChangeText={(v) => setProfile({ ...profile, lastName: v })}
-                placeholder="Last Name"
-                placeholderTextColor={colors.textMuted}
-              />
-            </View>
-          </View>
-
-          <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>Phone Number</Text>
-            <View style={styles.inputWrap}>
-              <TextInput
-                style={styles.input}
-                value={profile.phone}
-                onChangeText={(v) => setProfile({ ...profile, phone: v })}
-                placeholder="e.g. +1 555-0100"
-                placeholderTextColor={colors.textMuted}
-                keyboardType="phone-pad"
-              />
-            </View>
-          </View>
-        </View>
-
-        {/* ── Role & Department Section ─────────────────────────────── */}
-        <View style={styles.sectionCard}>
-          <View style={styles.sectionHeader}>
-            <View style={[styles.iconCircle, { backgroundColor: '#FEF3C7' }]}>
-              <Feather name="briefcase" size={16} color="#B45309" />
-            </View>
-            <Text style={styles.sectionTitle}>Role & Organization</Text>
-          </View>
-
-          <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>Employee / Admin ID</Text>
-            <View style={[styles.inputWrap, styles.inputDisabled]}>
-              <TextInput
-                style={[styles.input, styles.inputDisabledText]}
-                value={profile.employeeId}
-                editable={false}
-              />
-              <Feather name="lock" size={14} color={colors.textMuted} />
-            </View>
-          </View>
-
-          <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>Official Email</Text>
-            <View style={[styles.inputWrap, styles.inputDisabled]}>
-              <TextInput
-                style={[styles.input, styles.inputDisabledText]}
-                value={profile.email}
-                editable={false}
-              />
-              <Feather name="lock" size={14} color={colors.textMuted} />
-            </View>
-          </View>
-
-          <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>Department</Text>
-            <View style={styles.inputWrap}>
-              <TextInput
-                style={styles.input}
-                value={profile.department}
-                onChangeText={(v) => setProfile({ ...profile, department: v })}
-                placeholder="Department"
-                placeholderTextColor={colors.textMuted}
-              />
-            </View>
-          </View>
-
-          <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>Position / Title</Text>
-            <View style={styles.inputWrap}>
-              <TextInput
-                style={styles.input}
-                value={profile.position}
-                onChangeText={(v) => setProfile({ ...profile, position: v })}
-                placeholder="Position"
-                placeholderTextColor={colors.textMuted}
-              />
-            </View>
-          </View>
-        </View>
-
-        {/* ── Save Changes Button ───────────────────────────────────── */}
-        <TouchableOpacity
-          style={[styles.saveBtn, saving && { opacity: 0.7 }]}
-          onPress={handleSave}
-          disabled={saving}
-          activeOpacity={0.85}
-        >
-          {saving ? (
-            <ActivityIndicator size="small" color={colors.white} />
-          ) : (
-            <>
-              <Feather name="check" size={18} color={colors.white} style={{ marginRight: 8 }} />
-              <Text style={styles.saveBtnText}>Save Profile Changes</Text>
-            </>
-          )}
-        </TouchableOpacity>
-
-        {/* ── LOG OUT BUTTON ────────────────────────────────────────── */}
-        <TouchableOpacity
-          style={styles.logoutBtn}
-          onPress={handleLogout}
-          activeOpacity={0.85}
-        >
-          <Feather name="log-out" size={18} color="#DC2626" style={{ marginRight: 8 }} />
-          <Text style={styles.logoutBtnText}>Log Out from Management</Text>
-        </TouchableOpacity>
-
-        <View style={{ height: 40 }} />
-      </ScrollView>
+      <ConfirmModal
+        visible={confirmLogout}
+        title="Log out?"
+        message="You will need to sign in again to use the management portal."
+        confirmLabel="Log out"
+        destructive
+        onConfirm={handleLogout}
+        onCancel={() => setConfirmLogout(false)}
+      />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8F9FB',
-  },
-  scroll: {
-    flex: 1,
-  },
-  content: {
-    padding: spacing.md,
-  },
+  container: { flex: 1, backgroundColor: PAGE_BACKGROUND },
   avatarCard: {
     backgroundColor: colors.white,
     borderRadius: 20,
-    padding: spacing.lg,
+    padding: 20,
     alignItems: 'center',
-    marginBottom: spacing.md,
-    shadowColor: '#3D2C2E',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   avatarCircle: {
     width: 80,
@@ -339,166 +224,41 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: spacing.sm,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
+    marginBottom: 10,
   },
-  avatarText: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: colors.white,
-    letterSpacing: 1,
-  },
-  profileName: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.darkText,
-    marginBottom: 4,
-  },
+  avatarText: { fontSize: 26, fontWeight: '800', color: colors.white, letterSpacing: 1 },
+  profileName: { fontSize: 20, fontWeight: '700', color: colors.darkText, marginBottom: 6, textAlign: 'center' },
   roleBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FEF3C7',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-    marginBottom: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 999,
+    marginBottom: 8,
   },
-  roleBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#B45309',
-    letterSpacing: 0.5,
-  },
-  profileEmail: {
-    fontSize: 13,
-    color: colors.textSecondary,
-  },
-  feedbackBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: spacing.md,
-  },
-  feedbackSuccess: {
-    backgroundColor: '#D1FAE5',
-    borderColor: '#10B981',
-    borderWidth: 1,
-  },
-  feedbackError: {
-    backgroundColor: '#FEE2E2',
-    borderColor: '#EF4444',
-    borderWidth: 1,
-  },
-  feedbackText: {
-    fontSize: 13,
-    fontWeight: '600',
-    flex: 1,
-  },
-  feedbackSuccessText: {
-    color: '#065F46',
-  },
-  feedbackErrorText: {
-    color: '#991B1B',
-  },
-  sectionCard: {
-    backgroundColor: colors.white,
-    borderRadius: 18,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    shadowColor: '#3D2C2E',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  iconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.darkText,
-  },
-  fieldGroup: {
-    marginBottom: 12,
-  },
-  fieldLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    marginBottom: 6,
-  },
+  roleBadgeText: { fontSize: 12, fontWeight: '700', color: '#B45309' },
+  profileEmail: { fontSize: 13, color: colors.textSecondary, textAlign: 'center' },
+  twoColumn: { flexDirection: 'row', justifyContent: 'space-between' },
+  column: { width: '49%' },
+  field: { marginBottom: 12 },
+  fieldLabel: { fontSize: 12, fontWeight: '600', color: colors.textSecondary, marginBottom: 6 },
   inputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#FBF8F4',
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     paddingHorizontal: 12,
-    paddingVertical: Platform.OS === 'ios' ? 12 : 8,
+    minHeight: 48,
   },
-  inputDisabled: {
-    backgroundColor: '#F3F4F6',
-    borderColor: '#E5E7EB',
-  },
-  input: {
-    flex: 1,
-    fontSize: 14,
-    color: colors.darkText,
-  },
-  inputDisabledText: {
-    color: colors.textMuted,
-  },
-  saveBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primary,
-    borderRadius: 14,
-    paddingVertical: 14,
-    marginBottom: 12,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  saveBtnText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.white,
-  },
-  logoutBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FEE2E2',
-    borderWidth: 1.5,
-    borderColor: '#FCA5A5',
-    borderRadius: 14,
-    paddingVertical: 14,
-  },
-  logoutBtnText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#DC2626',
-  },
+  inputLocked: { backgroundColor: '#F3EEE8' },
+  inputError: { borderColor: colors.statusRedText },
+  input: { flex: 1, fontSize: 14, color: colors.darkText, paddingVertical: 10 },
+  inputLockedText: { color: colors.textMuted },
+  fieldError: { fontSize: 12, color: colors.statusRedText, marginTop: 4 },
+  logoutBtn: { marginTop: 10 },
 });
 
 export default ProfileScreen;

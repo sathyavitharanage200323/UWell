@@ -3,58 +3,82 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   TextInput,
-  ActivityIndicator,
-  RefreshControl,
-  Alert,
+  Modal,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableWithoutFeedback,
 } from 'react-native';
-import { colors, spacing, typography } from '../../theme';
-import Card from '../../components/common/Card';
+import { Feather } from '@expo/vector-icons';
+import { colors } from '../../theme';
 import NavigationHeader from '../../components/navigation/Header';
 import { managementService } from '../../services/managementService';
+import ConfirmModal from '../../components/management/ConfirmModal';
+import useSessionGuard from '../../components/management/useSessionGuard';
+import {
+  ResponsiveScroll,
+  SectionCard,
+  StatusPill,
+  Chip,
+  Banner,
+  LoadingState,
+  EmptyState,
+  ErrorState,
+  InfoRow,
+  ActionButton,
+  useLayout,
+  PAGE_BACKGROUND,
+} from '../../components/management/ManagementUI';
+
+const PAGE_SIZE = 20;
 
 const FILTERS = [
   { key: 'all', label: 'All', countKey: 'total' },
   { key: 'upcoming', label: 'Upcoming', countKey: 'upcoming' },
+  { key: 'in session', label: 'In session', countKey: 'in session' },
   { key: 'completed', label: 'Completed', countKey: 'completed' },
   { key: 'cancelled', label: 'Cancelled', countKey: 'cancelled' },
 ];
 
-const STATUS_LABELS = {
-  upcoming: 'Upcoming',
-  'in session': 'In Session',
-  completed: 'Completed',
-  cancelled: 'Cancelled',
-};
+const STATUS_LABEL = { upcoming: 'Upcoming', 'in session': 'In session', completed: 'Completed', cancelled: 'Cancelled' };
+const STATUS_TONE = { upcoming: 'warning', 'in session': 'info', completed: 'success', cancelled: 'danger' };
 
-const AppointmentsScreen = ({ navigation }) => {
+const initialOf = (name = '') => (name.trim()[0] || 'S').toUpperCase();
+
+const AppointmentsScreen = () => {
+  const handleError = useSessionGuard();
+  const { isWide } = useLayout();
+
   const [appointments, setAppointments] = useState([]);
-  const [summary, setSummary] = useState({ total: 0, upcoming: 0, completed: 0, cancelled: 0 });
+  const [summary, setSummary] = useState({});
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [updatingId, setUpdatingId] = useState(null);
   const [error, setError] = useState('');
+  const [banner, setBanner] = useState(null);
+
+  const [selected, setSelected] = useState(null);
+  const [notesDraft, setNotesDraft] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
 
   const load = useCallback(async () => {
     try {
       setError('');
-      const res = await managementService.getAppointments({
-        status: statusFilter,
-        search: search.trim(),
-      });
+      const res = await managementService.getAppointments({ status: statusFilter, search: search.trim() });
       setAppointments(res.appointments || []);
       setSummary(res.summary || {});
     } catch (err) {
-      setError(err.response?.data?.message || 'Could not load appointments. Check your connection.');
+      setError(handleError(err, 'Could not load appointments.'));
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [statusFilter, search]);
+  }, [statusFilter, search, handleError]);
 
   useEffect(() => {
     // Wait briefly while typing so each keystroke does not hit the server
@@ -62,246 +86,309 @@ const AppointmentsScreen = ({ navigation }) => {
     return () => clearTimeout(timer);
   }, [load]);
 
-  const changeStatus = async (appointment, status) => {
-    setUpdatingId(appointment.id);
+  useEffect(() => { setVisibleCount(PAGE_SIZE); }, [statusFilter, search]);
+
+  const showBanner = (type, message) => {
+    setBanner({ type, message });
+    setTimeout(() => setBanner(null), 4500);
+  };
+
+  const openDetails = (appointment) => {
+    setSelected(appointment);
+    setNotesDraft(appointment.notes || '');
+  };
+
+  const closeDetails = () => { setSelected(null); setConfirmCancel(false); };
+
+  const applyChange = async (changes, successMessage) => {
+    setSaving(true);
     try {
-      await managementService.updateAppointment(appointment.id, { status });
+      const res = await managementService.updateAppointment(selected.id, changes);
+      setSelected(res.appointment);
+      setNotesDraft(res.appointment.notes || '');
+      showBanner('success', successMessage);
       await load();
     } catch (err) {
-      Alert.alert('Update failed', err.response?.data?.message || 'Could not update the appointment.');
+      showBanner('error', handleError(err, 'The appointment could not be updated.'));
     } finally {
-      setUpdatingId(null);
+      setSaving(false);
+      setConfirmCancel(false);
     }
   };
 
-  const openActions = (appointment) => {
-    const options = [];
-    if (appointment.status !== 'completed') {
-      options.push({ text: 'Mark as completed', onPress: () => changeStatus(appointment, 'completed') });
-    }
-    if (appointment.status !== 'cancelled') {
-      options.push({
-        text: 'Cancel appointment',
-        style: 'destructive',
-        onPress: () =>
-          Alert.alert(
-            'Cancel appointment?',
-            `${appointment.studentName} with ${appointment.counselorName} on ${appointment.date}.`,
-            [
-              { text: 'Keep', style: 'cancel' },
-              { text: 'Cancel appointment', style: 'destructive', onPress: () => changeStatus(appointment, 'cancelled') },
-            ]
-          ),
-      });
-    }
-    if (appointment.status !== 'upcoming') {
-      options.push({ text: 'Reopen as upcoming', onPress: () => changeStatus(appointment, 'upcoming') });
-    }
-    options.push({ text: 'Close', style: 'cancel' });
-    Alert.alert(appointment.studentName, `Status: ${STATUS_LABELS[appointment.status]}`, options);
-  };
+  const shown = appointments.slice(0, visibleCount);
+  const notesChanged = selected && notesDraft.trim() !== (selected.notes || '').trim();
 
   return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />
-      }
-    >
-      <NavigationHeader title="All Appointments" />
+    <View style={styles.container}>
+      <NavigationHeader title="Appointments" />
 
-      <View style={styles.content}>
-        <TextInput
-          style={styles.search}
-          placeholder="Search student, counselor or department"
-          placeholderTextColor={colors.textMuted}
-          value={search}
-          onChangeText={setSearch}
-          autoCapitalize="none"
-        />
+      <ResponsiveScroll refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }}>
+        {banner ? <Banner type={banner.type} message={banner.message} /> : null}
+
+        <View style={styles.searchBox}>
+          <Feather name="search" size={16} color={colors.textMuted} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search student, counselor or service"
+            placeholderTextColor={colors.textMuted}
+            value={search}
+            onChangeText={setSearch}
+            autoCapitalize="none"
+            returnKeyType="search"
+            accessibilityLabel="Search appointments"
+          />
+          {search ? (
+            <TouchableOpacity onPress={() => setSearch('')} accessibilityLabel="Clear search" hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Feather name="x" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+          ) : null}
+        </View>
 
         <View style={styles.filterRow}>
           {FILTERS.map((f) => (
-            <TouchableOpacity
+            <Chip
               key={f.key}
-              style={[styles.filterChip, statusFilter === f.key && styles.filterChipActive]}
+              label={`${f.label} (${summary[f.countKey] ?? 0})`}
+              active={statusFilter === f.key}
               onPress={() => setStatusFilter(f.key)}
-            >
-              <Text style={[styles.filterText, statusFilter === f.key && styles.filterTextActive]}>
-                {f.label} ({summary[f.countKey] ?? 0})
-              </Text>
-            </TouchableOpacity>
+            />
           ))}
         </View>
 
         {loading ? (
-          <ActivityIndicator color={colors.primary} style={styles.loader} />
+          <LoadingState text="Loading appointments..." />
         ) : error ? (
-          <Card>
-            <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity onPress={() => { setLoading(true); load(); }}>
-              <Text style={styles.retry}>Try again</Text>
-            </TouchableOpacity>
-          </Card>
+          <ErrorState message={error} onRetry={() => { setLoading(true); load(); }} />
         ) : appointments.length === 0 ? (
-          <Card>
-            <Text style={styles.emptyText}>No appointments match this filter.</Text>
-          </Card>
+          <EmptyState icon="calendar" title="No appointments found" text="Try a different search or filter." />
         ) : (
-          appointments.map((appointment) => (
-            <TouchableOpacity
-              key={appointment.id}
-              onPress={() => openActions(appointment)}
-              disabled={updatingId === appointment.id}
-            >
-              <Card style={[styles.appointmentCard, appointment.status === 'cancelled' && styles.cancelledCard]}>
-                <View style={styles.appointmentHeader}>
-                  <Text style={styles.studentName}>{appointment.studentName}</Text>
-                  {updatingId === appointment.id ? (
-                    <ActivityIndicator color={colors.primary} />
-                  ) : (
-                    <View
-                      style={[
-                        styles.statusBadge,
-                        appointment.status === 'completed' && styles.completedBadge,
-                        (appointment.status === 'upcoming' || appointment.status === 'in session') && styles.upcomingBadge,
-                        appointment.status === 'cancelled' && styles.cancelledBadge,
-                      ]}
-                    >
-                      <Text style={styles.statusText}>{STATUS_LABELS[appointment.status]}</Text>
+          <>
+            <Text style={styles.resultCount}>
+              Showing {shown.length} of {appointments.length} appointments
+            </Text>
+            <View style={isWide ? styles.twoColumn : null}>
+              {shown.map((a) => (
+                <TouchableOpacity
+                  key={a.id}
+                  style={isWide ? styles.twoColumnItem : null}
+                  onPress={() => openDetails(a)}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Appointment for ${a.studentName}, ${STATUS_LABEL[a.status]}`}
+                >
+                  <SectionCard style={a.status === 'cancelled' ? styles.cancelledCard : null}>
+                    <View style={styles.cardTop}>
+                      <View style={styles.avatar}>
+                        <Text style={styles.avatarText}>{initialOf(a.studentName)}</Text>
+                      </View>
+                      <View style={styles.cardTitleBox}>
+                        <Text style={styles.studentName} numberOfLines={1}>{a.studentName}</Text>
+                        <Text style={styles.counselorName} numberOfLines={1}>with {a.counselorName}</Text>
+                      </View>
+                      <StatusPill label={STATUS_LABEL[a.status]} tone={STATUS_TONE[a.status]} />
                     </View>
-                  )}
-                </View>
-                <View style={styles.appointmentDetails}>
-                  <Text style={styles.detail}>Counselor: {appointment.counselorName}</Text>
-                  <Text style={styles.detail}>Date: {appointment.date}</Text>
-                  <Text style={styles.detail}>Time: {appointment.time}</Text>
-                  <Text style={styles.detail}>Dept: {appointment.specialization}</Text>
-                </View>
-                <Text style={styles.hint}>Tap to update status</Text>
-              </Card>
-            </TouchableOpacity>
-          ))
+                    <View style={styles.metaRow}>
+                      <View style={styles.metaItem}>
+                        <Feather name="calendar" size={13} color={colors.textMuted} />
+                        <Text style={styles.metaText}>{a.date}</Text>
+                      </View>
+                      <View style={styles.metaItem}>
+                        <Feather name="clock" size={13} color={colors.textMuted} />
+                        <Text style={styles.metaText}>{a.time}</Text>
+                      </View>
+                      <View style={styles.metaItem}>
+                        <Feather name="tag" size={13} color={colors.textMuted} />
+                        <Text style={styles.metaText} numberOfLines={1}>{a.specialization}</Text>
+                      </View>
+                    </View>
+                  </SectionCard>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {shown.length < appointments.length ? (
+              <ActionButton
+                title={`Show ${Math.min(PAGE_SIZE, appointments.length - shown.length)} more`}
+                variant="secondary"
+                onPress={() => setVisibleCount((c) => c + PAGE_SIZE)}
+              />
+            ) : null}
+          </>
         )}
-      </View>
-    </ScrollView>
+      </ResponsiveScroll>
+
+      {/* ── Appointment details ───────────────────────────────────────── */}
+      <Modal visible={!!selected && !confirmCancel} transparent animationType="slide" onRequestClose={closeDetails}>
+        <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <TouchableWithoutFeedback onPress={closeDetails}>
+            <View style={styles.overlay}>
+              <TouchableWithoutFeedback>
+                <View style={styles.sheet}>
+                  {selected ? (
+                    <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                      <View style={styles.sheetHeader}>
+                        <View style={styles.cardTitleBox}>
+                          <Text style={styles.sheetTitle}>{selected.studentName}</Text>
+                          <StatusPill label={STATUS_LABEL[selected.status]} tone={STATUS_TONE[selected.status]} />
+                        </View>
+                        <TouchableOpacity onPress={closeDetails} accessibilityLabel="Close details" style={styles.closeBtn}>
+                          <Feather name="x" size={20} color={colors.darkText} />
+                        </TouchableOpacity>
+                      </View>
+
+                      <View style={styles.detailBox}>
+                        <InfoRow label="Counselor" value={selected.counselorName} />
+                        <InfoRow label="Service" value={selected.specialization} />
+                        <InfoRow label="Date" value={selected.date} />
+                        <InfoRow label="Time" value={selected.time} />
+                        <InfoRow label="Session type" value={selected.sessionType} />
+                      </View>
+
+                      <Text style={styles.fieldLabel}>Management notes</Text>
+                      <TextInput
+                        style={styles.notesInput}
+                        value={notesDraft}
+                        onChangeText={setNotesDraft}
+                        placeholder="Add a note about this appointment"
+                        placeholderTextColor={colors.textMuted}
+                        multiline
+                        maxLength={500}
+                      />
+                      <Text style={styles.counter}>{notesDraft.length}/500</Text>
+                      <ActionButton
+                        title="Save notes"
+                        icon="save"
+                        variant="secondary"
+                        disabled={!notesChanged}
+                        loading={saving}
+                        onPress={() => applyChange({ notes: notesDraft.trim() }, 'Notes saved.')}
+                      />
+
+                      <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Change status</Text>
+                      <View style={styles.statusActions}>
+                        {selected.status !== 'completed' && (
+                          <ActionButton
+                            title="Mark completed"
+                            icon="check"
+                            disabled={saving}
+                            onPress={() => applyChange({ status: 'completed' }, 'Marked as completed. The student was notified.')}
+                            style={styles.statusBtn}
+                          />
+                        )}
+                        {selected.status !== 'cancelled' && (
+                          <ActionButton
+                            title="Cancel appointment"
+                            icon="x-circle"
+                            variant="danger"
+                            disabled={saving}
+                            onPress={() => setConfirmCancel(true)}
+                            style={styles.statusBtn}
+                          />
+                        )}
+                        {selected.status !== 'upcoming' && (
+                          <ActionButton
+                            title="Reopen as upcoming"
+                            icon="rotate-ccw"
+                            variant="secondary"
+                            disabled={saving}
+                            onPress={() => applyChange({ status: 'upcoming' }, 'Set back to upcoming. The student was notified.')}
+                            style={styles.statusBtn}
+                          />
+                        )}
+                      </View>
+                      <Text style={styles.hint}>Status changes send a notification to the student.</Text>
+                    </ScrollView>
+                  ) : null}
+                </View>
+              </TouchableWithoutFeedback>
+            </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      <ConfirmModal
+        visible={confirmCancel}
+        title="Cancel this appointment?"
+        message={selected ? `${selected.studentName} with ${selected.counselorName} on ${selected.date}. The student will be notified.` : ''}
+        confirmLabel="Cancel appointment"
+        cancelLabel="Keep"
+        destructive
+        loading={saving}
+        onConfirm={() => applyChange({ status: 'cancelled' }, 'Appointment cancelled. The student was notified.')}
+        onCancel={() => setConfirmCancel(false)}
+      />
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.backgroundLight,
-  },
-  content: {
-    padding: spacing.lg,
-  },
-  search: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    fontSize: typography.fontSize.md,
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
-  filterRow: {
+  container: { flex: 1, backgroundColor: PAGE_BACKGROUND },
+  fill: { flex: 1 },
+  searchBox: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: spacing.md,
-  },
-  filterChip: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 16,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    marginRight: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  filterChipActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  filterText: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text,
-  },
-  filterTextActive: {
-    color: colors.textWhite,
-    fontWeight: typography.fontWeight.bold,
-  },
-  loader: {
-    marginTop: spacing.xl,
-  },
-  errorText: {
-    color: colors.error,
-    fontSize: typography.fontSize.md,
-  },
-  retry: {
-    color: colors.primary,
-    fontWeight: typography.fontWeight.bold,
-    marginTop: spacing.sm,
-  },
-  emptyText: {
-    color: colors.textLight,
-    fontSize: typography.fontSize.md,
-    textAlign: 'center',
-  },
-  appointmentCard: {
-    marginBottom: spacing.md,
-  },
-  cancelledCard: {
-    opacity: 0.6,
-  },
-  appointmentHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    minHeight: 46,
+    marginBottom: 12,
   },
-  studentName: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text,
-    flexShrink: 1,
+  searchInput: { flex: 1, fontSize: 14, color: colors.darkText, marginLeft: 8, paddingVertical: 10 },
+  filterRow: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 4 },
+  resultCount: { fontSize: 12, color: colors.textMuted, marginBottom: 10 },
+  twoColumn: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  twoColumnItem: { width: '49%' },
+  cancelledCard: { opacity: 0.65 },
+  cardTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  avatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
   },
-  statusBadge: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: 4,
+  avatarText: { fontSize: 15, fontWeight: '700', color: colors.primaryDark },
+  cardTitleBox: { flex: 1, paddingRight: 8 },
+  studentName: { fontSize: 15, fontWeight: '700', color: colors.darkText },
+  counselorName: { fontSize: 12, color: colors.textSecondary, marginTop: 1 },
+  metaRow: { flexDirection: 'row', flexWrap: 'wrap' },
+  metaItem: { flexDirection: 'row', alignItems: 'center', marginRight: 14, marginBottom: 4, maxWidth: '100%' },
+  metaText: { fontSize: 12, color: colors.textSecondary, marginLeft: 5, flexShrink: 1 },
+  overlay: { flex: 1, backgroundColor: 'rgba(61,44,46,0.45)', justifyContent: 'flex-end', alignItems: 'center' },
+  sheet: {
+    width: '100%',
+    maxWidth: 560,
+    maxHeight: '90%',
+    backgroundColor: colors.white,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: 28,
   },
-  completedBadge: {
-    backgroundColor: colors.success,
+  sheetHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 12 },
+  sheetTitle: { fontSize: 20, fontWeight: '700', color: colors.darkText, marginBottom: 6 },
+  closeBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F3EEE8', alignItems: 'center', justifyContent: 'center' },
+  detailBox: { backgroundColor: '#FBF8F4', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6, marginBottom: 14 },
+  fieldLabel: { fontSize: 12, fontWeight: '600', color: colors.textSecondary, marginBottom: 6 },
+  notesInput: {
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: 12,
+    minHeight: 84,
+    textAlignVertical: 'top',
+    fontSize: 14,
+    color: colors.darkText,
+    backgroundColor: '#FBF8F4',
   },
-  upcomingBadge: {
-    backgroundColor: colors.warning,
-  },
-  cancelledBadge: {
-    backgroundColor: colors.error,
-  },
-  statusText: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.textWhite,
-  },
-  appointmentDetails: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  detail: {
-    fontSize: typography.fontSize.md,
-    color: colors.textLight,
-    width: '48%',
-    marginBottom: spacing.xs,
-  },
-  hint: {
-    fontSize: typography.fontSize.sm,
-    color: colors.textMuted,
-    marginTop: spacing.xs,
-  },
+  counter: { fontSize: 11, color: colors.textMuted, textAlign: 'right', marginVertical: 4 },
+  statusActions: { flexDirection: 'row', flexWrap: 'wrap' },
+  statusBtn: { flexGrow: 1, flexBasis: 150, marginRight: 8, marginBottom: 8 },
+  hint: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
 });
 
 export default AppointmentsScreen;

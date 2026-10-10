@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const Notification = require('../../models/Notification');
 const Management = require('../../models/management/Management');
 const Counselor = require('../../models/counselor/Counselor');
 const Welfare = require('../../models/welfare/Welfare');
@@ -6,6 +7,9 @@ const Student = require('../../models/student/Student');
 const Appointment = require('../../models/management/AppointmentRecord');
 const UsageReport = require('../../models/management/UsageReport');
 const ServiceNote = require('../../models/management/ServiceNote');
+
+// Reject malformed ids up front so they return a clean 400/404 instead of a CastError 500
+const isValidId = (id) => /^[a-f\d]{24}$/i.test(String(id));
 
 const signToken = (id, role) => {
   return jwt.sign({ id, role }, process.env.JWT_SECRET, {
@@ -170,7 +174,12 @@ exports.getAllRequests = async (req, res) => {
   try {
     const { status, role } = req.query;
     const filter = {};
-    if (status) filter.approvalStatus = status;
+    if (status) {
+      if (!['pending', 'approved', 'rejected'].includes(status)) {
+        return res.status(400).json({ success: false, message: 'Status must be pending, approved or rejected' });
+      }
+      filter.approvalStatus = status;
+    }
 
     let counselors = [];
     let welfareOfficers = [];
@@ -235,113 +244,66 @@ exports.getAllRequests = async (req, res) => {
   }
 };
 
-// ── Approve Request ───────────────────────────────────────────────────────────
-exports.approveRequest = async (req, res) => {
+// ── Approve / Reject Request ──────────────────────────────────────────────────
+// Management can approve a pending request, reject one, change a rejection to an
+// approval, or revoke an approval, so the previous status is not restricted.
+const reviewRequest = async (req, res, decision) => {
   try {
     const targetId = req.body.userId || req.body.id || req.body._id;
-    const rawRole = (req.body.role || '').toLowerCase().trim();
+    const rawRole = String(req.body.role || '').toLowerCase();
 
     if (!targetId) {
       return res.status(400).json({ success: false, message: 'User ID is required' });
     }
-
-    const isCounselor = rawRole.includes('counselor');
-    let Model = isCounselor ? Counselor : Welfare;
-    let actualRole = isCounselor ? 'counselor' : 'welfare';
-
-    let user = await Model.findById(targetId);
-    if (!user) {
-      // Fallback: search the other collection in case role was omitted or mismatched
-      const AltModel = isCounselor ? Welfare : Counselor;
-      const altUser = await AltModel.findById(targetId);
-      if (altUser) {
-        Model = AltModel;
-        user = altUser;
-        actualRole = isCounselor ? 'welfare' : 'counselor';
-      }
+    if (!isValidId(targetId)) {
+      return res.status(400).json({ success: false, message: 'Invalid user ID' });
     }
 
+    let Model = null;
+    let actualRole = '';
+    if (rawRole.includes('counselor')) { Model = Counselor; actualRole = 'counselor'; }
+    else if (rawRole.includes('welfare')) { Model = Welfare; actualRole = 'welfare'; }
+    if (!Model) {
+      return res.status(400).json({ success: false, message: 'Role must be counselor or welfare' });
+    }
+
+    const user = await Model.findById(targetId);
     if (!user) {
       return res.status(404).json({ success: false, message: 'User account not found' });
     }
 
-    const updatedUser = await Model.findByIdAndUpdate(
-      user._id,
-      {
-        $set: {
-          approvalStatus: 'approved',
-          isApproved: true,
-          approvedAt: new Date(),
-          approvedBy: req.user.id,
-          rejectionReason: '',
-        },
-      },
-      { new: true, runValidators: false }
-    );
-
-    res.status(200).json({
-      success: true,
-      message: `${updatedUser.fullName || updatedUser.firstName} (${actualRole}) has been approved successfully. They can now log in.`,
-      user: updatedUser.toSafeObject ? updatedUser.toSafeObject() : updatedUser,
-    });
-  } catch (error) {
-    console.error('❌ approveRequest error:', error);
-    res.status(500).json({ success: false, message: error.message || 'Server error approving request' });
-  }
-};
-
-// ── Reject Request ────────────────────────────────────────────────────────────
-exports.rejectRequest = async (req, res) => {
-  try {
-    const targetId = req.body.userId || req.body.id || req.body._id;
-    const rawRole = (req.body.role || '').toLowerCase().trim();
-    const reason = req.body.reason || 'Registration rejected by administrator.';
-
-    if (!targetId) {
-      return res.status(400).json({ success: false, message: 'User ID is required' });
-    }
-
-    const isCounselor = rawRole.includes('counselor');
-    let Model = isCounselor ? Counselor : Welfare;
-    let actualRole = isCounselor ? 'counselor' : 'welfare';
-
-    let user = await Model.findById(targetId);
-    if (!user) {
-      const AltModel = isCounselor ? Welfare : Counselor;
-      const altUser = await AltModel.findById(targetId);
-      if (altUser) {
-        Model = AltModel;
-        user = altUser;
-        actualRole = isCounselor ? 'welfare' : 'counselor';
+    const update = decision === 'approved'
+      ? {
+        approvalStatus: 'approved',
+        isApproved: true,
+        approvedAt: new Date(),
+        approvedBy: req.user.id,
+        rejectionReason: '',
       }
-    }
+      : {
+        approvalStatus: 'rejected',
+        isApproved: false,
+        rejectionReason: String(req.body.reason || '').trim().slice(0, 300) || 'Registration rejected by administrator.',
+      };
 
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User account not found' });
-    }
-
-    const updatedUser = await Model.findByIdAndUpdate(
-      user._id,
-      {
-        $set: {
-          approvalStatus: 'rejected',
-          isApproved: false,
-          rejectionReason: reason,
-        },
-      },
-      { new: true, runValidators: false }
-    );
+    const updatedUser = await Model.findByIdAndUpdate(user._id, { $set: update }, { new: true, runValidators: false });
+    const name = updatedUser.fullName || updatedUser.firstName;
 
     res.status(200).json({
       success: true,
-      message: `${updatedUser.fullName || updatedUser.firstName} (${actualRole}) registration request has been rejected.`,
+      message: decision === 'approved'
+        ? `${name} (${actualRole}) has been approved successfully. They can now log in.`
+        : `${name} (${actualRole}) registration request has been rejected.`,
       user: updatedUser.toSafeObject ? updatedUser.toSafeObject() : updatedUser,
     });
   } catch (error) {
-    console.error('❌ rejectRequest error:', error);
-    res.status(500).json({ success: false, message: error.message || 'Server error rejecting request' });
+    console.error(`❌ ${decision} request error:`, error);
+    res.status(500).json({ success: false, message: 'Server error reviewing request' });
   }
 };
+
+exports.approveRequest = (req, res) => reviewRequest(req, res, 'approved');
+exports.rejectRequest = (req, res) => reviewRequest(req, res, 'rejected');
 
 // ── Dashboard Overview Stats ──────────────────────────────────────────────────
 exports.getDashboardStats = async (req, res) => {
@@ -400,6 +362,16 @@ exports.updateManagementProfile = async (req, res) => {
   try {
     const { firstName, lastName, phone, department, position } = req.body;
 
+    if ([firstName, lastName].some((v) => v !== undefined && String(v).trim().length > 50)) {
+      return res.status(400).json({ success: false, message: 'Names cannot exceed 50 characters' });
+    }
+    if ([department, position].some((v) => v !== undefined && String(v).trim().length > 100)) {
+      return res.status(400).json({ success: false, message: 'Department and position cannot exceed 100 characters' });
+    }
+    if (phone !== undefined && String(phone).trim() && !/^\+?[\d\s\-()]{7,20}$/.test(String(phone).trim())) {
+      return res.status(400).json({ success: false, message: 'Enter a valid phone number (7 to 20 digits, spaces, dashes or +)' });
+    }
+
     const manager = await Management.findById(req.user.id);
     if (!manager) {
       return res.status(404).json({ success: false, message: 'Management account not found' });
@@ -407,7 +379,7 @@ exports.updateManagementProfile = async (req, res) => {
 
     if (firstName) manager.firstName = firstName.trim();
     if (lastName) manager.lastName = lastName.trim();
-    if (phone !== undefined) manager.phone = phone.trim();
+    if (phone !== undefined) manager.phone = String(phone).trim();
     if (department) manager.department = department.trim();
     if (position) manager.position = position.trim();
 
@@ -442,6 +414,21 @@ const normaliseStatus = (status = '') => {
 };
 
 const MANAGED_STATUSES = ['upcoming', 'completed', 'cancelled'];
+
+// A failed notification must never fail the appointment update itself
+const notify = async (recipientId, recipientType, title, message, type, appointmentId) => {
+  try {
+    await Notification.create({ recipientId, recipientType, title, message, type, appointmentId });
+  } catch (err) {
+    console.error('❌ management notify error:', err.message);
+  }
+};
+
+const STATUS_NOTICE = {
+  cancelled: { title: 'Appointment Cancelled', type: 'appointment_cancelled', verb: 'has been cancelled by management' },
+  completed: { title: 'Appointment Completed', type: 'appointment_updated', verb: 'has been marked as completed' },
+  upcoming: { title: 'Appointment Reopened', type: 'appointment_updated', verb: 'has been set back to upcoming' },
+};
 
 // Student bookings store a reference to the student, not their name, so the name
 // is looked up from the populated student record when it was not saved on the booking.
@@ -499,14 +486,35 @@ exports.updateManagementAppointment = async (req, res) => {
       return res.status(400).json({ success: false, message: `Status must be one of: ${MANAGED_STATUSES.join(', ')}` });
     }
 
+    if (!isValidId(req.params.id)) {
+      return res.status(404).json({ success: false, message: 'Appointment not found' });
+    }
     const appointment = await withStudent(Appointment.findById(req.params.id));
     if (!appointment) {
       return res.status(404).json({ success: false, message: 'Appointment not found' });
     }
 
+    const previousStatus = normaliseStatus(appointment.status);
     if (status !== undefined) appointment.status = status;
     if (notes !== undefined) appointment.notes = String(notes).trim().slice(0, 500);
     await appointment.save();
+
+    // Tell the student (and the counselor, when linked) about a real status change
+    if (status !== undefined && status !== previousStatus) {
+      const notice = STATUS_NOTICE[status];
+      const when = [appointment.date, appointment.time].filter(Boolean).join(' at ');
+      const studentId = appointment.student && (appointment.student._id || appointment.student);
+      if (studentId) {
+        await notify(studentId, 'student', notice.title,
+          `Your appointment with ${appointment.counselorName}${when ? ` on ${when}` : ''} ${notice.verb}.`,
+          notice.type, appointment._id);
+      }
+      if (appointment.counselor) {
+        await notify(appointment.counselor, 'counselor', notice.title,
+          `The session with ${studentNameOf(appointment)}${when ? ` on ${when}` : ''} ${notice.verb}.`,
+          notice.type, appointment._id);
+      }
+    }
 
     res.status(200).json({
       success: true,
@@ -667,6 +675,7 @@ exports.getSavedReports = async (req, res) => {
 
 exports.deleteSavedReport = async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(404).json({ success: false, message: 'Report not found' });
     const deleted = await UsageReport.findOneAndDelete({ _id: req.params.id, generatedBy: req.user.id });
     if (!deleted) return res.status(404).json({ success: false, message: 'Report not found' });
     res.status(200).json({ success: true, message: 'Report deleted' });
@@ -760,6 +769,9 @@ exports.addServiceNote = async (req, res) => {
 
 exports.deleteServiceNote = async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) {
+      return res.status(404).json({ success: false, message: 'Note not found, or it belongs to another manager' });
+    }
     const deleted = await ServiceNote.findOneAndDelete({ _id: req.params.id, createdBy: req.user.id });
     if (!deleted) {
       return res.status(404).json({ success: false, message: 'Note not found, or it belongs to another manager' });
@@ -804,8 +816,13 @@ exports.changePassword = async (req, res) => {
     if (!currentPassword || !newPassword) {
       return res.status(400).json({ success: false, message: 'Current and new password are required' });
     }
-    if (String(newPassword).length < 8) {
-      return res.status(400).json({ success: false, message: 'New password must be at least 8 characters' });
+    // Same strength rules as registration, so a password cannot be weakened afterwards
+    const pw = String(newPassword);
+    if (pw.length < 8 || !/[A-Z]/.test(pw) || !/[a-z]/.test(pw) || !/\d/.test(pw) || !/[^A-Za-z0-9]/.test(pw)) {
+      return res.status(400).json({
+        success: false,
+        message: 'New password must be at least 8 characters with an uppercase letter, a lowercase letter, a number and a special character',
+      });
     }
     if (newPassword === currentPassword) {
       return res.status(400).json({ success: false, message: 'New password must be different from the current one' });

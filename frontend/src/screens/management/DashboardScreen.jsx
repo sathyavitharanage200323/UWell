@@ -1,817 +1,413 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  RefreshControl,
-  Alert,
-} from 'react-native';
-import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { colors, spacing, typography } from '../../theme';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { colors } from '../../theme';
 import NavigationHeader from '../../components/navigation/Header';
 import { authService } from '../../services/authService';
 import { useAuth } from '../../context/AuthContext';
+import ConfirmModal from '../../components/management/ConfirmModal';
+import useSessionGuard from '../../components/management/useSessionGuard';
+import {
+  ResponsiveScroll,
+  SectionCard,
+  StatusPill,
+  Chip,
+  Banner,
+  LoadingState,
+  EmptyState,
+  ErrorState,
+  InfoRow,
+  ActionButton,
+  useLayout,
+  PAGE_BACKGROUND,
+} from '../../components/management/ManagementUI';
 
-export default function DashboardScreen({ navigation }) {
+const TABS = [
+  { key: 'pending', label: 'Pending' },
+  { key: 'approved', label: 'Approved' },
+  { key: 'rejected', label: 'Rejected' },
+];
+
+const ROLE_FILTERS = [
+  { key: 'all', label: 'All roles' },
+  { key: 'counselor', label: 'Counselors' },
+  { key: 'welfare', label: 'Welfare officers' },
+];
+
+const formatDate = (value) => (value ? new Date(value).toLocaleDateString() : '');
+
+const DashboardScreen = () => {
   const { logout } = useAuth();
-  const [stats, setStats] = useState({
-    totalUsers: 0,
-    activeStudents: 0,
-    totalCounselors: 0,
-    totalWelfareOfficers: 0,
-    totalPendingRequests: 0,
-    pendingCounselors: 0,
-    pendingWelfare: 0,
-  });
+  const handleError = useSessionGuard();
+  const { isWide } = useLayout();
 
   const [requests, setRequests] = useState([]);
+  const [stats, setStats] = useState({ activeStudents: 0, totalCounselors: 0, totalWelfareOfficers: 0 });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [actionLoading, setActionLoading] = useState({});
-  const [activeRoleFilter, setActiveRoleFilter] = useState('all'); // 'all' | 'counselor' | 'welfare'
-  const [feedback, setFeedback] = useState(null);
+  const [loadError, setLoadError] = useState('');
+  const [banner, setBanner] = useState(null);
+  const [tab, setTab] = useState('pending');
+  const [roleFilter, setRoleFilter] = useState('all');
+  const [busyId, setBusyId] = useState(null);
 
-  const fetchDashboardData = useCallback(async () => {
-    try {
-      setLoading(true);
-      const [pendingRes, statsRes] = await Promise.allSettled([
-        authService.getPendingRequests(),
-        authService.getDashboardStats(),
-      ]);
+  // Which dialog is open: { kind: 'approve' | 'reject' | 'logout', item? }
+  const [dialog, setDialog] = useState(null);
+  const [reason, setReason] = useState('');
 
-      if (pendingRes.status === 'fulfilled' && pendingRes.value?.success) {
-        setRequests(pendingRes.value.requests || []);
-        if (pendingRes.value.totalPending !== undefined) {
-          setStats((prev) => ({
-            ...prev,
-            totalPendingRequests: pendingRes.value.totalPending,
-            pendingCounselors: pendingRes.value.counselorsPending || 0,
-            pendingWelfare: pendingRes.value.welfarePending || 0,
-          }));
-        }
-      }
+  const load = useCallback(async () => {
+    setLoadError('');
+    const [reqRes, statsRes] = await Promise.allSettled([
+      authService.getAllRequests(),
+      authService.getDashboardStats(),
+    ]);
 
-      if (statsRes.status === 'fulfilled' && statsRes.value?.success) {
-        setStats((prev) => ({
-          ...prev,
-          ...statsRes.value.stats,
-        }));
-      }
-    } catch (error) {
-      console.error('Error loading dashboard data:', error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+    if (reqRes.status === 'fulfilled' && reqRes.value?.success) {
+      setRequests(reqRes.value.requests || []);
+    } else {
+      setLoadError(handleError(reqRes.reason, 'Could not load registration requests.'));
     }
-  }, []);
+    if (statsRes.status === 'fulfilled' && statsRes.value?.success) {
+      setStats(statsRes.value.stats || {});
+    }
+    setLoading(false);
+    setRefreshing(false);
+  }, [handleError]);
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, [fetchDashboardData]);
+  useEffect(() => { load(); }, [load]);
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchDashboardData();
+  const showBanner = (type, message) => {
+    setBanner({ type, message });
+    setTimeout(() => setBanner(null), 5000);
   };
 
-  const handleApprove = async (item) => {
+  const counts = useMemo(() => {
+    const c = { pending: 0, approved: 0, rejected: 0 };
+    requests.forEach((r) => { if (c[r.approvalStatus] !== undefined) c[r.approvalStatus] += 1; });
+    return c;
+  }, [requests]);
+
+  const visible = useMemo(
+    () => requests.filter((r) => r.approvalStatus === tab && (roleFilter === 'all' || r.role === roleFilter)),
+    [requests, tab, roleFilter]
+  );
+
+  const closeDialog = () => { setDialog(null); setReason(''); };
+
+  const runReview = async () => {
+    const { kind, item } = dialog;
+    setBusyId(item.id);
     try {
-      setActionLoading((p) => ({ ...p, [item.id]: 'approving' }));
-      const res = await authService.approveRequest(item.id, item.role);
-
-      // Remove approved item from list
-      setRequests((prev) => prev.filter((r) => r.id !== item.id));
-
-      // Update counters
-      setStats((prev) => ({
-        ...prev,
-        totalPendingRequests: Math.max(0, prev.totalPendingRequests - 1),
-        pendingCounselors: item.role === 'counselor' ? Math.max(0, prev.pendingCounselors - 1) : prev.pendingCounselors,
-        pendingWelfare: item.role === 'welfare' ? Math.max(0, prev.pendingWelfare - 1) : prev.pendingWelfare,
-        totalCounselors: item.role === 'counselor' ? prev.totalCounselors + 1 : prev.totalCounselors,
-        totalWelfareOfficers: item.role === 'welfare' ? prev.totalWelfareOfficers + 1 : prev.totalWelfareOfficers,
-      }));
-
-      setFeedback({
-        type: 'success',
-        message: `✅ ${item.fullName} (${item.role}) approved! They can now log in.`,
-      });
-      setTimeout(() => setFeedback(null), 5000);
-    } catch (error) {
-      Alert.alert('Approval Failed', error.response?.data?.message || error.message);
+      if (kind === 'approve') {
+        await authService.approveRequest(item.id, item.role);
+        showBanner('success', `${item.fullName} approved. They can now log in.`);
+      } else {
+        await authService.rejectRequest(item.id, item.role, reason.trim());
+        showBanner('info', `${item.fullName}'s access was ${item.approvalStatus === 'approved' ? 'revoked' : 'rejected'}.`);
+      }
+      closeDialog();
+      await load();
+    } catch (err) {
+      closeDialog();
+      showBanner('error', handleError(err, 'The decision could not be saved.'));
     } finally {
-      setActionLoading((p) => ({ ...p, [item.id]: null }));
+      setBusyId(null);
     }
   };
 
-  const handleReject = async (item) => {
-    Alert.alert(
-      'Confirm Rejection',
-      `Are you sure you want to reject the registration request for ${item.fullName}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reject',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setActionLoading((p) => ({ ...p, [item.id]: 'rejecting' }));
-              await authService.rejectRequest(item.id, item.role, 'Rejected by management review');
+  const confirmLogout = async () => {
+    try { await authService.logout(); } catch (e) { /* local sign-out is enough */ }
+    closeDialog();
+    if (logout) await logout();
+  };
 
-              setRequests((prev) => prev.filter((r) => r.id !== item.id));
-              setStats((prev) => ({
-                ...prev,
-                totalPendingRequests: Math.max(0, prev.totalPendingRequests - 1),
-                pendingCounselors: item.role === 'counselor' ? Math.max(0, prev.pendingCounselors - 1) : prev.pendingCounselors,
-                pendingWelfare: item.role === 'welfare' ? Math.max(0, prev.pendingWelfare - 1) : prev.pendingWelfare,
-              }));
+  const statItems = [
+    { label: 'Pending requests', value: counts.pending, meta: 'Waiting for review', color: '#D97706' },
+    { label: 'Registered students', value: stats.activeStudents || 0, meta: 'Auto-verified', color: colors.primary },
+    { label: 'Active counselors', value: stats.totalCounselors || 0, meta: 'Approved clinical staff', color: '#7C5CBF' },
+    { label: 'Welfare officers', value: stats.totalWelfareOfficers || 0, meta: 'Approved support team', color: '#397052' },
+  ];
 
-              setFeedback({
-                type: 'info',
-                message: `Registration for ${item.fullName} has been rejected.`,
-              });
-              setTimeout(() => setFeedback(null), 5000);
-            } catch (error) {
-              Alert.alert('Rejection Failed', error.response?.data?.message || error.message);
-            } finally {
-              setActionLoading((p) => ({ ...p, [item.id]: null }));
-            }
-          },
-        },
-      ]
+  const renderRequest = (item) => {
+    const isCounselor = item.role === 'counselor';
+    const busy = busyId === item.id;
+    const status = item.approvalStatus;
+
+    return (
+      <SectionCard key={item.id} style={styles.requestCard}>
+        <View style={styles.cardTop}>
+          <View style={styles.cardTopText}>
+            <Text style={styles.applicantName}>{item.fullName}</Text>
+            <View style={styles.tagRow}>
+              <View style={[styles.roleTag, isCounselor ? styles.roleCounselor : styles.roleWelfare]}>
+                <MaterialCommunityIcons
+                  name={isCounselor ? 'doctor' : 'shield-account'}
+                  size={13}
+                  color={isCounselor ? '#7C5CBF' : '#397052'}
+                  style={{ marginRight: 4 }}
+                />
+                <Text style={[styles.roleTagText, { color: isCounselor ? '#7C5CBF' : '#397052' }]}>
+                  {isCounselor ? 'Counselor' : 'Welfare officer'}
+                </Text>
+              </View>
+              <StatusPill
+                label={status === 'pending' ? 'Pending' : status === 'approved' ? 'Approved' : 'Rejected'}
+                tone={status === 'pending' ? 'warning' : status === 'approved' ? 'success' : 'danger'}
+              />
+            </View>
+          </View>
+          <Text style={styles.dateText}>{formatDate(status === 'approved' ? item.approvedAt || item.createdAt : item.createdAt)}</Text>
+        </View>
+
+        <View style={styles.details}>
+          <InfoRow label="Staff ID" value={item.staffId} bold />
+          <InfoRow label="Email" value={item.email} />
+          <InfoRow label="Phone" value={item.phone || 'Not provided'} />
+          {item.officeLocation ? <InfoRow label="Office" value={item.officeLocation} /> : null}
+          {isCounselor ? (
+            <>
+              <InfoRow label="Qualification" value={item.qualification} />
+              <InfoRow label="Specialization" value={item.specialization} />
+              <InfoRow label="Experience" value={`${item.yearsOfExperience} years`} />
+            </>
+          ) : (
+            <>
+              <InfoRow label="Department" value={item.department} />
+              <InfoRow label="Position" value={item.position} />
+            </>
+          )}
+          {status === 'rejected' && item.rejectionReason ? (
+            <InfoRow label="Reason" value={item.rejectionReason} />
+          ) : null}
+        </View>
+
+        <View style={styles.actions}>
+          {status !== 'rejected' && (
+            <ActionButton
+              title={status === 'approved' ? 'Revoke access' : 'Reject'}
+              icon="x"
+              variant="danger"
+              disabled={busy}
+              onPress={() => setDialog({ kind: 'reject', item })}
+              style={styles.actionBtn}
+            />
+          )}
+          {status !== 'approved' && (
+            <ActionButton
+              title={status === 'rejected' ? 'Approve instead' : 'Approve account'}
+              icon="check"
+              loading={busy}
+              onPress={() => setDialog({ kind: 'approve', item })}
+              style={styles.actionBtn}
+            />
+          )}
+        </View>
+      </SectionCard>
     );
   };
 
-  const handleLogout = () => {
-    Alert.alert(
-      'Log Out',
-      'Are you sure you want to log out of the Management Portal?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Log Out',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await authService.logout();
-            } catch (e) {}
-            if (logout) {
-              await logout();
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const filteredRequests = requests.filter((r) => {
-    if (activeRoleFilter === 'counselor') return r.role === 'counselor';
-    if (activeRoleFilter === 'welfare') return r.role === 'welfare';
-    return true;
-  });
-
-  const counselorCount = requests.filter((r) => r.role === 'counselor').length;
-  const welfareCount = requests.filter((r) => r.role === 'welfare').length;
+  const emptyText = {
+    pending: 'No registrations are waiting for review.',
+    approved: 'No staff accounts have been approved yet.',
+    rejected: 'No registrations have been rejected.',
+  }[tab];
 
   return (
     <View style={styles.container}>
       <NavigationHeader title="Management Dashboard" />
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />}
-      >
-        {/* ── Greeting Header ────────────────────────────────────────── */}
+      <ResponsiveScroll refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }}>
         <View style={styles.greetingRow}>
-          <View style={{ flex: 1, paddingRight: 10 }}>
-            <Text style={styles.greetingTitle}>Administration Portal 👋</Text>
-            <Text style={styles.greetingSub}>Review & approve counselor and welfare officer accounts</Text>
+          <View style={styles.greetingText}>
+            <Text style={styles.greetingTitle}>Administration Portal</Text>
+            <Text style={styles.greetingSub}>Review and manage counselor and welfare officer accounts</Text>
           </View>
-          <View style={styles.headerBtnsRow}>
-            <TouchableOpacity style={styles.refreshBtn} onPress={onRefresh} disabled={refreshing} accessibilityLabel="Refresh">
-              <Feather name="refresh-cw" size={16} color={colors.primary} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.logoutHeaderBtn} onPress={handleLogout} accessibilityLabel="Log out">
-              <Feather name="log-out" size={16} color="#DC2626" />
-            </TouchableOpacity>
+          <TouchableOpacity style={styles.iconBtn} onPress={() => { setRefreshing(true); load(); }} accessibilityLabel="Refresh">
+            <Feather name="refresh-cw" size={16} color={colors.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.iconBtn, styles.logoutBtn]}
+            onPress={() => setDialog({ kind: 'logout' })}
+            accessibilityLabel="Log out"
+          >
+            <Feather name="log-out" size={16} color={colors.statusRedText} />
+          </TouchableOpacity>
+        </View>
+
+        {banner ? <Banner type={banner.type} message={banner.message} /> : null}
+
+        <View style={[styles.statusCard, counts.pending > 0 ? styles.statusPending : styles.statusClear]}>
+          <View style={[styles.statusIcon, { backgroundColor: counts.pending > 0 ? '#FDE68A' : colors.statusGreenBg }]}>
+            <Feather
+              name={counts.pending > 0 ? 'shield' : 'check-circle'}
+              size={22}
+              color={counts.pending > 0 ? '#B45309' : colors.statusGreenText}
+            />
+          </View>
+          <View style={styles.statusText}>
+            <Text style={styles.statusTitle}>
+              {counts.pending} pending {counts.pending === 1 ? 'request' : 'requests'}
+            </Text>
+            <Text style={styles.statusSub}>
+              {counts.pending > 0
+                ? 'These staff members cannot log in until you approve them.'
+                : 'All staff accounts are up to date.'}
+            </Text>
           </View>
         </View>
 
-        {/* ── Feedback Banner ────────────────────────────────────────── */}
-        {feedback && (
-          <View style={[styles.feedbackBox, feedback.type === 'success' ? styles.feedbackSuccess : styles.feedbackInfo]}>
-            <Text style={[styles.feedbackText, feedback.type === 'success' ? styles.feedbackSuccessText : styles.feedbackInfoText]}>
-              {feedback.message}
-            </Text>
-          </View>
-        )}
-
-        {/* ── Pending Requests Alert Banner ──────────────────────────── */}
-        <View style={styles.approvalAlertCard}>
-          <View style={styles.alertIconCircle}>
-            <Feather name="shield" size={24} color="#B45309" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.alertCardTitle}>
-              {requests.length} Pending Approval {requests.length === 1 ? 'Request' : 'Requests'}
-            </Text>
-            <Text style={styles.alertCardSub}>
-              {requests.length > 0
-                ? 'Counselors and Welfare Officers require management approval before they can log in.'
-                : 'All staff accounts are up to date! No registrations awaiting review.'}
-            </Text>
-          </View>
-        </View>
-
-        {/* ── System Overview Stats Grid ─────────────────────────────── */}
-        <Text style={styles.sectionHeader}>System Overview</Text>
+        <Text style={styles.sectionHeader}>System overview</Text>
         <View style={styles.statsGrid}>
-          <View style={[styles.statCard, { borderLeftColor: '#F59E0B' }]}>
-            <Text style={[styles.statNumber, { color: '#D97706' }]}>{requests.length}</Text>
-            <Text style={styles.statLabel}>Pending Requests</Text>
-            <Text style={styles.statMeta}>{counselorCount} Counselors • {welfareCount} Welfare</Text>
-          </View>
-
-          <View style={[styles.statCard, { borderLeftColor: colors.primary }]}>
-            <Text style={styles.statNumber}>{stats.activeStudents || 0}</Text>
-            <Text style={styles.statLabel}>Registered Students</Text>
-            <Text style={styles.statMeta}>Auto-verified</Text>
-          </View>
-
-          <View style={[styles.statCard, { borderLeftColor: '#7C5CBF' }]}>
-            <Text style={[styles.statNumber, { color: '#7C5CBF' }]}>{stats.totalCounselors || 0}</Text>
-            <Text style={styles.statLabel}>Active Counselors</Text>
-            <Text style={styles.statMeta}>Approved clinical staff</Text>
-          </View>
-
-          <View style={[styles.statCard, { borderLeftColor: '#397052' }]}>
-            <Text style={[styles.statNumber, { color: '#397052' }]}>{stats.totalWelfareOfficers || 0}</Text>
-            <Text style={styles.statLabel}>Welfare Officers</Text>
-            <Text style={styles.statMeta}>Approved support team</Text>
-          </View>
-        </View>
-
-        {/* ── Requests Section Header & Filter Tabs ─────────────────── */}
-        <View style={styles.requestsHeaderRow}>
-          <View>
-            <Text style={styles.sectionHeader}>Registration Requests</Text>
-            <Text style={styles.sectionSub}>Review submitted registration form details</Text>
-          </View>
-        </View>
-
-        {/* Filter Pills */}
-        <View style={styles.filterRow}>
-          <TouchableOpacity
-            style={[styles.filterPill, activeRoleFilter === 'all' && styles.filterPillActive]}
-            onPress={() => setActiveRoleFilter('all')}
-          >
-            <Text style={[styles.filterPillText, activeRoleFilter === 'all' && styles.filterPillTextActive]}>
-              All ({requests.length})
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.filterPill, activeRoleFilter === 'counselor' && styles.filterPillActive]}
-            onPress={() => setActiveRoleFilter('counselor')}
-          >
-            <Text style={[styles.filterPillText, activeRoleFilter === 'counselor' && styles.filterPillTextActive]}>
-              🏥 Counselors ({counselorCount})
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.filterPill, activeRoleFilter === 'welfare' && styles.filterPillActive]}
-            onPress={() => setActiveRoleFilter('welfare')}
-          >
-            <Text style={[styles.filterPillText, activeRoleFilter === 'welfare' && styles.filterPillTextActive]}>
-              🛡️ Welfare Officers ({welfareCount})
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* ── Pending Requests List ──────────────────────────────────── */}
-        {loading && !refreshing ? (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={styles.loadingText}>Fetching registration requests…</Text>
-          </View>
-        ) : filteredRequests.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <View style={styles.emptyCircle}>
-              <Feather name="check-circle" size={40} color={colors.statusGreenText} />
+          {statItems.map((s) => (
+            <View key={s.label} style={[styles.statCard, { width: isWide ? '24%' : '48.5%', borderLeftColor: s.color }]}>
+              <Text style={[styles.statNumber, { color: s.color }]}>{s.value}</Text>
+              <Text style={styles.statLabel}>{s.label}</Text>
+              <Text style={styles.statMeta}>{s.meta}</Text>
             </View>
-            <Text style={styles.emptyTitle}>All Caught Up!</Text>
-            <Text style={styles.emptySub}>
-              {requests.length === 0
-                ? 'No pending registration requests. All new counselors and welfare officers have been reviewed.'
-                : `No pending ${activeRoleFilter} requests right now.`}
-            </Text>
-          </View>
+          ))}
+        </View>
+
+        <Text style={styles.sectionHeader}>Registration requests</Text>
+        <View style={styles.tabRow} accessibilityRole="tablist">
+          {TABS.map((t) => (
+            <TouchableOpacity
+              key={t.key}
+              style={[styles.tab, tab === t.key && styles.tabActive]}
+              onPress={() => setTab(t.key)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: tab === t.key }}
+            >
+              <Text style={[styles.tabText, tab === t.key && styles.tabTextActive]}>
+                {t.label} ({counts[t.key]})
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <View style={styles.filterRow}>
+          {ROLE_FILTERS.map((f) => (
+            <Chip key={f.key} label={f.label} active={roleFilter === f.key} onPress={() => setRoleFilter(f.key)} />
+          ))}
+        </View>
+
+        {loading ? (
+          <LoadingState text="Loading registration requests..." />
+        ) : loadError ? (
+          <ErrorState message={loadError} onRetry={() => { setLoading(true); load(); }} />
+        ) : visible.length === 0 ? (
+          <EmptyState icon="check-circle" title="Nothing here" text={emptyText} />
         ) : (
-          filteredRequests.map((item) => {
-            const isCounselor = item.role === 'counselor';
-            const isApproving = actionLoading[item.id] === 'approving';
-            const isRejecting = actionLoading[item.id] === 'rejecting';
-            const isBusy = isApproving || isRejecting;
-
-            return (
-              <View key={item.id} style={styles.requestCard}>
-                {/* Card Top: Name, Badge, Date */}
-                <View style={styles.cardTopRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.applicantName}>{item.fullName}</Text>
-                    <View style={styles.badgeRow}>
-                      <View
-                        style={[
-                          styles.roleTag,
-                          isCounselor
-                            ? { backgroundColor: '#F3EEFF', borderColor: '#D8B4FE' }
-                            : { backgroundColor: '#E8F8EF', borderColor: '#A7F3D0' },
-                        ]}
-                      >
-                        <MaterialCommunityIcons
-                          name={isCounselor ? 'doctor' : 'shield-account'}
-                          size={13}
-                          color={isCounselor ? '#7C5CBF' : '#397052'}
-                          style={{ marginRight: 4 }}
-                        />
-                        <Text style={[styles.roleTagText, { color: isCounselor ? '#7C5CBF' : '#397052' }]}>
-                          {isCounselor ? 'COUNSELOR' : 'WELFARE OFFICER'}
-                        </Text>
-                      </View>
-
-                      <View style={styles.statusTagPending}>
-                        <Feather name="clock" size={11} color="#B45309" style={{ marginRight: 3 }} />
-                        <Text style={styles.statusTagPendingText}>Pending Approval</Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  <Text style={styles.submissionDate}>
-                    {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : 'Recent'}
-                  </Text>
-                </View>
-
-                {/* Form Details Table */}
-                <View style={styles.detailsBox}>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Staff ID:</Text>
-                    <Text style={styles.detailHighlight}>{item.staffId}</Text>
-                  </View>
-
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Email:</Text>
-                    <Text style={styles.detailValue}>{item.email}</Text>
-                  </View>
-
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Phone:</Text>
-                    <Text style={styles.detailValue}>{item.phone || 'N/A'}</Text>
-                  </View>
-
-                  {item.officeLocation ? (
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Office Location:</Text>
-                      <Text style={styles.detailValue}>{item.officeLocation}</Text>
-                    </View>
-                  ) : null}
-
-                  {/* Role Specific Credentials */}
-                  {isCounselor ? (
-                    <>
-                      <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Qualification:</Text>
-                        <Text style={styles.detailValue}>{item.qualification}</Text>
-                      </View>
-                      <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Specialization:</Text>
-                        <Text style={styles.detailValue}>{item.specialization}</Text>
-                      </View>
-                      <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Experience:</Text>
-                        <Text style={styles.detailValue}>{item.yearsOfExperience}</Text>
-                      </View>
-                    </>
-                  ) : (
-                    <>
-                      <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Department:</Text>
-                        <Text style={styles.detailValue}>{item.department}</Text>
-                      </View>
-                      <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Position:</Text>
-                        <Text style={styles.detailValue}>{item.position}</Text>
-                      </View>
-                    </>
-                  )}
-                </View>
-
-                {/* Card Actions: Approve / Reject */}
-                <View style={styles.actionsRow}>
-                  <TouchableOpacity
-                    style={[styles.rejectBtn, isBusy && { opacity: 0.6 }]}
-                    onPress={() => handleReject(item)}
-                    disabled={isBusy}
-                    activeOpacity={0.8}
-                  >
-                    {isRejecting ? (
-                      <ActivityIndicator size="small" color={colors.statusRedText} />
-                    ) : (
-                      <>
-                        <Feather name="x" size={16} color={colors.statusRedText} style={{ marginRight: 6 }} />
-                        <Text style={styles.rejectBtnText}>Reject</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.approveBtn, isBusy && { opacity: 0.6 }]}
-                    onPress={() => handleApprove(item)}
-                    disabled={isBusy}
-                    activeOpacity={0.8}
-                  >
-                    {isApproving ? (
-                      <ActivityIndicator size="small" color={colors.white} />
-                    ) : (
-                      <>
-                        <Feather name="check" size={16} color={colors.white} style={{ marginRight: 6 }} />
-                        <Text style={styles.approveBtnText}>Approve Account</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </View>
-            );
-          })
+          <View style={isWide ? styles.twoColumn : null}>
+            {visible.map((item) => (
+              <View key={item.id} style={isWide ? styles.twoColumnItem : null}>{renderRequest(item)}</View>
+            ))}
+          </View>
         )}
-      </ScrollView>
+      </ResponsiveScroll>
+
+      <ConfirmModal
+        visible={dialog?.kind === 'approve'}
+        title="Approve this account?"
+        message={dialog?.item ? `${dialog.item.fullName} will be able to log in as a ${dialog.item.role === 'counselor' ? 'counselor' : 'welfare officer'}.` : ''}
+        confirmLabel="Approve"
+        loading={!!busyId}
+        onConfirm={runReview}
+        onCancel={closeDialog}
+      />
+      <ConfirmModal
+        visible={dialog?.kind === 'reject'}
+        title={dialog?.item?.approvalStatus === 'approved' ? 'Revoke access?' : 'Reject this registration?'}
+        message={dialog?.item ? `${dialog.item.fullName} will not be able to log in.` : ''}
+        confirmLabel={dialog?.item?.approvalStatus === 'approved' ? 'Revoke' : 'Reject'}
+        destructive
+        loading={!!busyId}
+        inputLabel="Reason (optional, shown to the applicant)"
+        inputPlaceholder="e.g. Staff ID could not be verified"
+        inputValue={reason}
+        onChangeInput={setReason}
+        onConfirm={runReview}
+        onCancel={closeDialog}
+      />
+      <ConfirmModal
+        visible={dialog?.kind === 'logout'}
+        title="Log out?"
+        message="You will need to sign in again to use the management portal."
+        confirmLabel="Log out"
+        destructive
+        onConfirm={confirmLogout}
+        onCancel={closeDialog}
+      />
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F9F6F0',
-  },
-  scroll: {
-    flex: 1,
-  },
-  content: {
-    padding: spacing.md,
-    paddingBottom: 40,
-  },
-  greetingRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  greetingTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: colors.darkText,
-  },
-  greetingSub: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  headerBtnsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  refreshBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoutHeaderBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#FEE2E2',
-    borderWidth: 1,
-    borderColor: '#FCA5A5',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  feedbackBox: {
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 14,
-    borderWidth: 1,
-  },
-  feedbackSuccess: {
-    backgroundColor: '#DEF7EC',
-    borderColor: '#31C48D',
-  },
-  feedbackInfo: {
-    backgroundColor: '#E1EFFE',
-    borderColor: '#76A9FA',
-  },
-  feedbackText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  feedbackSuccessText: {
-    color: '#03543F',
-  },
-  feedbackInfoText: {
-    color: '#1E429F',
-  },
-  approvalAlertCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FEF3C7',
-    borderWidth: 1.5,
-    borderColor: '#FDE68A',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 20,
-    shadowColor: '#B45309',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  alertIconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#FDE68A',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14,
-  },
-  alertCardTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#92400E',
-    marginBottom: 2,
-  },
-  alertCardSub: {
-    fontSize: 12,
-    color: '#78350F',
-    lineHeight: 17,
-  },
-  sectionHeader: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.darkText,
-    marginBottom: 4,
-  },
-  sectionSub: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginBottom: 12,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 22,
-  },
-  statCard: {
-    flex: 1,
-    minWidth: '47%',
-    backgroundColor: colors.white,
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderLeftWidth: 4,
-    shadowColor: '#3D2C2E',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
-  },
-  statNumber: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: colors.primary,
-  },
-  statLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.darkText,
-    marginTop: 2,
-  },
-  statMeta: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    marginTop: 4,
-  },
-  requestsHeaderRow: {
-    marginBottom: 8,
-  },
-  filterRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 16,
-  },
-  filterPill: {
-    paddingVertical: 7,
-    paddingHorizontal: 12,
+  container: { flex: 1, backgroundColor: PAGE_BACKGROUND },
+  greetingRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  greetingText: { flex: 1, paddingRight: 10 },
+  greetingTitle: { fontSize: 22, fontWeight: '700', color: colors.darkText },
+  greetingSub: { fontSize: 13, color: colors.textSecondary, marginTop: 2, lineHeight: 18 },
+  iconBtn: {
+    width: 40,
+    height: 40,
     borderRadius: 20,
     backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.border,
-  },
-  filterPillActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  filterPillText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  filterPillTextActive: {
-    color: colors.white,
-  },
-  loadingBox: {
-    padding: 40,
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: 8,
   },
-  loadingText: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginTop: 10,
-  },
-  emptyCard: {
+  logoutBtn: { backgroundColor: colors.statusRedBg, borderColor: '#F5B7B1' },
+  statusCard: { flexDirection: 'row', alignItems: 'center', borderRadius: 16, padding: 14, marginBottom: 18, borderWidth: 1.5 },
+  statusPending: { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' },
+  statusClear: { backgroundColor: colors.statusGreenBg, borderColor: '#B7E1C5' },
+  statusIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  statusText: { flex: 1 },
+  statusTitle: { fontSize: 15, fontWeight: '700', color: colors.darkText },
+  statusSub: { fontSize: 12, color: colors.textSecondary, marginTop: 2, lineHeight: 17 },
+  sectionHeader: { fontSize: 16, fontWeight: '700', color: colors.darkText, marginBottom: 10 },
+  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 12 },
+  statCard: {
     backgroundColor: colors.white,
-    borderRadius: 16,
-    padding: 32,
-    alignItems: 'center',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: colors.border,
-    marginVertical: 10,
+    borderLeftWidth: 4,
   },
-  emptyCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#DEF7EC',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.darkText,
-    marginBottom: 6,
-  },
-  emptySub: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-  requestCard: {
-    backgroundColor: colors.white,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 14,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    shadowColor: '#3D2C2E',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  cardTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  applicantName: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: colors.darkText,
-    marginBottom: 6,
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flexWrap: 'wrap',
-  },
+  statNumber: { fontSize: 26, fontWeight: '800', color: colors.darkText },
+  statLabel: { fontSize: 13, fontWeight: '600', color: colors.darkText, marginTop: 2 },
+  statMeta: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
+  tabRow: { flexDirection: 'row', backgroundColor: '#EFE9E2', borderRadius: 12, padding: 4, marginBottom: 12 },
+  tab: { flex: 1, paddingVertical: 10, borderRadius: 9, alignItems: 'center', minHeight: 40, justifyContent: 'center' },
+  tabActive: { backgroundColor: colors.white },
+  tabText: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
+  tabTextActive: { color: colors.darkText, fontWeight: '700' },
+  filterRow: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 6 },
+  twoColumn: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  twoColumnItem: { width: '49%' },
+  requestCard: { marginBottom: 12 },
+  cardTop: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8 },
+  cardTopText: { flex: 1, paddingRight: 8 },
+  applicantName: { fontSize: 16, fontWeight: '700', color: colors.darkText, marginBottom: 6 },
+  tagRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' },
   roleTag: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  roleTagText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  statusTagPending: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-  },
-  statusTagPendingText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#92400E',
-  },
-  submissionDate: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  detailsBox: {
-    backgroundColor: '#FDFCF9',
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#F0ECE6',
-    marginBottom: 14,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    borderRadius: 999,
+    paddingHorizontal: 10,
     paddingVertical: 4,
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#F5F1EB',
+    marginRight: 8,
+    marginBottom: 4,
   },
-  detailLabel: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-  detailValue: {
-    fontSize: 12,
-    color: colors.darkText,
-    fontWeight: '600',
-    maxWidth: '65%',
-    textAlign: 'right',
-  },
-  detailHighlight: {
-    fontSize: 12,
-    color: colors.primary,
-    fontWeight: '700',
-  },
-  actionsRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  rejectBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 11,
-    borderRadius: 12,
-    backgroundColor: '#FDF2F2',
-    borderWidth: 1,
-    borderColor: '#F98080',
-  },
-  rejectBtnText: {
-    color: colors.statusRedText,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  approveBtn: {
-    flex: 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 11,
-    borderRadius: 12,
-    backgroundColor: '#0E9F6E',
-    shadowColor: '#0E9F6E',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  approveBtnText: {
-    color: colors.white,
-    fontSize: 13,
-    fontWeight: '700',
-  },
+  roleCounselor: { backgroundColor: '#F3EEFF' },
+  roleWelfare: { backgroundColor: '#E8F8EF' },
+  roleTagText: { fontSize: 11, fontWeight: '700' },
+  dateText: { fontSize: 12, color: colors.textMuted },
+  details: { backgroundColor: '#FBF8F4', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6, marginBottom: 12 },
+  actions: { flexDirection: 'row', flexWrap: 'wrap' },
+  actionBtn: { flexGrow: 1, flexBasis: 140, marginRight: 8, marginTop: 4 },
 });
+
+export default DashboardScreen;
