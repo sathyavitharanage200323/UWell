@@ -8,49 +8,10 @@ export const authService = {
       const response = await api.post(endpoint, { email, password, role });
       return response.data;
     } catch (error) {
-      if (error.response?.data) {
-        throw error;
-      }
-
-      const userRole = role || 'student';
-      let userData;
-
-      if (userRole === 'counselor') {
-        const counselor = mockUsers.counselors[0];
-        userData = {
-          ...counselor,
-          name: `${counselor.firstName} ${counselor.lastName}`,
-          role: 'counselor'
-        };
-      } else if (userRole === 'student') {
-        const student = mockUsers.students[0];
-        userData = {
-          ...student,
-          name: `${student.firstName} ${student.lastName}`,
-          role: 'student'
-        };
-      } else if (userRole === 'welfare') {
-        const welfare = mockUsers.welfare[0];
-        userData = {
-          ...welfare,
-          name: `${welfare.firstName} ${welfare.lastName}`,
-          role: 'welfare'
-        };
-      } else if (userRole === 'management') {
-        const management = mockUsers.management[0];
-        userData = {
-          ...management,
-          name: `${management.firstName} ${management.lastName}`,
-          role: 'management'
-        };
-      } else {
-        throw error;
-      }
-
-      return {
-        user: userData,
-        token: 'demo-jwt-token-12345'
-      };
+      // Always propagate the real error — never substitute a fake token.
+      // The UI (LoginScreen) catches this and shows the server message or a
+      // network-error message to the user.
+      throw error;
     }
   },
 

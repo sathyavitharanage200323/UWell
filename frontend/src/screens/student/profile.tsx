@@ -59,12 +59,12 @@ export default function ProfileScreen() {
     ]);
   };
 
-  const fullName = user?.fullName || (user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : 'Wasana');
-  const studentId = user?.studentId || 'STU20240001';
-  const email = user?.email || 'student@example.com';
-  const faculty = user?.faculty || 'Faculty of Computing';
-  const degree = user?.degreeProgram || 'Computer Science';
-  const year = user?.yearOfStudy || 'Year 1';
+  const fullName = user?.fullName || (user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : 'Student');
+  const studentId = user?.studentId || '—';
+  const email = user?.email || '—';
+  const faculty = user?.faculty || '—';
+  const degree = user?.degreeProgram || '—';
+  const year = user?.yearOfStudy || '—';
   const phone = user?.phone || 'Not provided';
 
   return (

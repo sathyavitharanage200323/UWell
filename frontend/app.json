@@ -34,7 +34,8 @@
           "backgroundColor": "#ffffff",
           "enableFullScreenImage_legacy": true
         }
-      ]
+      ],
+      "expo-audio"
     ]
   }
 }

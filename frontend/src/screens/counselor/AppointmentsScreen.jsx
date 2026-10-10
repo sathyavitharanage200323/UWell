@@ -91,14 +91,14 @@ const AppointmentsScreen = ({ navigation }) => {
         <View style={styles.actionsRow}>
           <TouchableOpacity
             style={[styles.actionBtn, styles.acceptBtn]}
-            onPress={() => handleStatusChange(item.id, 'Confirmed')}
+            onPress={() => handleStatusChange(item.id || item._id, 'Confirmed')}
             accessibilityLabel="Accept Session"
           >
             <Text style={styles.acceptBtnText}>Accept Session</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionBtn, styles.declineBtn]}
-            onPress={() => handleStatusChange(item.id, 'Cancelled')}
+            onPress={() => handleStatusChange(item.id || item._id, 'Cancelled')}
             accessibilityLabel="Decline Session"
           >
             <Text style={styles.declineBtnText}>Decline</Text>
@@ -140,7 +140,7 @@ const AppointmentsScreen = ({ navigation }) => {
         {/* List */}
         <FlatList
           data={filteredAppointments}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item.id || item._id || String(Math.random())}
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}

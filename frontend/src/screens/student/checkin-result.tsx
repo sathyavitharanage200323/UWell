@@ -284,7 +284,11 @@ export default function CheckInResultScreen() {
 
           <Pressable
             style={styles.tipsButton}
-            onPress={() => navigation.navigate('MentalHealthTips')}
+            onPress={() => {
+              // MentalHealthTips lives in the Home stack, not the Mood stack.
+              // Navigate to the Home tab first, then to the MentalHealthTips screen.
+              navigation.getParent()?.navigate('Home', { screen: 'MentalHealthTips' });
+            }}
           >
 
             <Text style={styles.tipsText}>

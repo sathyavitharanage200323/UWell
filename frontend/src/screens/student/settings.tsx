@@ -10,9 +10,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { useAuth } from '../../context/AuthContext';
 
 export default function SettingsScreen() {
   const navigation = useNavigation<any>();
+  const { logout } = useAuth();
   const [remindersEnabled, setRemindersEnabled] = useState(true);
 
   const handleLogout = () => {
@@ -27,7 +29,11 @@ export default function SettingsScreen() {
         {
           text: 'Logout',
           style: 'destructive',
-          onPress: () => navigation.navigate('Login'),
+          onPress: async () => {
+            // Clears JWT token and user from AsyncStorage,
+            // resets isAuthenticated — AuthNavigator redirects to Welcome
+            await logout();
+          },
         },
       ],
     );

@@ -9,7 +9,8 @@ const appointmentSchema = new mongoose.Schema(
     },
     counselorId: {
       type: String,
-      default: null,
+      default: '',
+      trim: true,
     },
     counselorName: {
       type: String,

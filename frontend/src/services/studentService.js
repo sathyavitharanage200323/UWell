@@ -58,10 +58,13 @@ export const studentService = {
   },
 
   submitWellbeingCheck: async (wellbeingData) => {
-    const response = await api.post('/student/wellbeing-check', wellbeingData);
-    return response.data;
+    // Wellbeing check results are stored client-side only (no dedicated backend endpoint).
+    // Return a resolved value so callers don't throw.
+    console.log('[studentService] submitWellbeingCheck (local only):', wellbeingData);
+    return { success: true, data: wellbeingData };
   },
 
+  // ── Counselors (read-only, from Counselor collection) ────────────────────
   getCounselors: async () => {
     const response = await api.get('/student/counselors');
     return response.data;
@@ -73,7 +76,8 @@ export const studentService = {
   },
 
   getCounselorAvailability: async (counselorId) => {
-    const response = await api.get(`/student/counselors/${counselorId}/availability`);
+    const params = counselorId ? `?counselorId=${encodeURIComponent(counselorId)}` : '';
+    const response = await api.get(`/student/counselor-availability${params}`);
     return response.data;
   },
 

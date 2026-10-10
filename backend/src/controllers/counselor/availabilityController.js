@@ -26,6 +26,10 @@ exports.createAvailability = async (req, res) => {
 
     const result = await CounselorAvailability.create({
       _id: `av-${Date.now()}`,
+      // The counselor module uses the string 'c1' as the profile ID throughout
+      // (CounselorProfile._id, CounselorAppointment.counselorId, CounselorAvailability.counselorId).
+      // The authenticated Counselor ObjectId (req.user.id) is the auth identity;
+      // 'c1' is the counselor module's display identity. These are separate systems.
       counselorId: 'c1',
       day,
       active,
