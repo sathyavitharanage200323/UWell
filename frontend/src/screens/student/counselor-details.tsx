@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { studentService } from '../../services/studentService';
 
 type Counselor = {
   name: string;
@@ -17,55 +18,49 @@ type Counselor = {
   icon: string;
   bio: string;
   availability: string;
+  clinicalFocus?: string[];
 };
 
 export default function CounselorDetailsScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute();
-  const params = route.params as { counselorId?: number } || {};
+  const params = route.params as { counselorId?: string } || {};
   const { counselorId } = params;
-  const id = String(counselorId || '1');
+  const id = String(counselorId || 'c1');
 
-  const counselors: Record<string, Counselor> = {
-    '1': {
-      name: 'Dr. Sarah Perera',
-      specialization: 'Student Counselling',
-      experience: '8 years experience',
-      qualification: 'PhD in Counselling Psychology',
-      icon: '👩‍⚕️',
-      bio:
-        'Experienced in supporting university students with personal, academic and emotional wellbeing concerns.',
-      availability: 'Available today',
-    },
+  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<any>(null);
 
-    '2': {
-      name: 'Ms. Amaya Fernando',
-      specialization: 'Stress & Anxiety',
-      experience: '6 years experience',
-      qualification: 'MSc in Psychology',
-      icon: '👩‍💼',
-      bio:
-        'Specializes in helping students manage stress, anxiety and challenges related to university life.',
-      availability: 'Available tomorrow',
-    },
+  useEffect(() => {
+    let active = true;
+    studentService
+      .getCounselorById(id)
+      .then((data: any) => {
+        if (active) setProfile(data?.data || data);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [id]);
 
-    '3': {
-      name: 'Dr. Kavindu Silva',
-      specialization: 'Academic & Personal Support',
-      experience: '5 years experience',
-      qualification: 'MA in Counselling Psychology',
-      icon: '👨‍⚕️',
-      bio:
-        'Provides supportive counselling for academic pressure, personal challenges and student wellbeing.',
-      availability: 'Available this week',
-    },
+  const counselor: Counselor = {
+    name: profile?.name || (loading ? 'Loading…' : 'Counselor'),
+    specialization: profile?.specialization || 'Student Counselling',
+    experience: profile?.title || 'Counseling Staff',
+    qualification: profile?.qualification || '',
+    icon: profile?.avatarInitials || '👩‍⚕️',
+    bio: profile?.bio || '',
+    availability: 'Available',
+    clinicalFocus: profile?.clinicalFocus || [],
   };
-
-  const counselor = counselors[String(id)] || counselors['1'];
 
   const handleViewAvailability = () => {
     navigation.navigate('Availability', {
-      counselorId: Number(id),
+      counselorId: id,
       counselorName: counselor.name,
     });
   };
@@ -186,26 +181,25 @@ export default function CounselorDetailsScreen() {
         </Text>
 
         <View style={styles.supportAreasCard}>
-          <View style={styles.supportItem}>
-            <Text style={styles.supportBullet}>✓</Text>
-            <Text style={styles.supportText}>
-              Academic and university-related concerns
-            </Text>
-          </View>
-
-          <View style={styles.supportItem}>
-            <Text style={styles.supportBullet}>✓</Text>
-            <Text style={styles.supportText}>
-              Stress and emotional wellbeing
-            </Text>
-          </View>
-
-          <View style={styles.supportItem}>
-            <Text style={styles.supportBullet}>✓</Text>
-            <Text style={styles.supportText}>
-              Personal challenges and wellbeing support
-            </Text>
-          </View>
+          {(counselor.clinicalFocus && counselor.clinicalFocus.length > 0
+            ? counselor.clinicalFocus
+            : [
+                'Academic and university-related concerns',
+                'Stress and emotional wellbeing',
+                'Personal challenges and wellbeing support',
+              ]
+          ).map((area, index, arr) => (
+            <View
+              key={`${area}-${index}`}
+              style={[
+                styles.supportItem,
+                index === arr.length - 1 && styles.supportItemLast,
+              ]}
+            >
+              <Text style={styles.supportBullet}>✓</Text>
+              <Text style={styles.supportText}>{area}</Text>
+            </View>
+          ))}
         </View>
 
         {/* Confidentiality */}

@@ -68,6 +68,10 @@ app.post('/api/auth/login', (req, res, next) => {
   return require('./src/controllers/student/authController').loginStudent(req, res, next);
 });
 
+// Student-facing counselor directory & availability (mount BEFORE the generic
+// /api/student router so the /:studentId route does not swallow it)
+app.use('/api/student/counselors', require('./src/routes/student/counselorRoutes'));
+
 // Student Profile & CRUD
 app.use('/api/student', require('./src/routes/student/studentRoutes'));
 

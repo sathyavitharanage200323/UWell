@@ -5,7 +5,7 @@ const Appointment = require('../../models/student/Appointment');
 // ─────────────────────────────────────────────────────────────────────────────
 exports.createAppointment = async (req, res) => {
   try {
-    const { counselorName, counselorSpecialization, date, time, sessionType, notes } = req.body;
+    const { counselorId, counselorName, counselorSpecialization, date, time, sessionType, notes } = req.body;
 
     if (!counselorName || !date || !time) {
       return res.status(400).json({
@@ -16,6 +16,7 @@ exports.createAppointment = async (req, res) => {
 
     const appointment = await Appointment.create({
       student: req.user.id,
+      counselorId: counselorId || null,
       counselorName,
       counselorSpecialization: counselorSpecialization || 'Student Counselling',
       date,

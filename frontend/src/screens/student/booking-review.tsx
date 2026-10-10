@@ -84,7 +84,7 @@ export default function BookingReviewScreen() {
     counselorName?: string;
     appointmentId?: string;
   } || {};
-  const { date, time, sessionType, notes, counselorName, appointmentId } = params;
+  const { counselorId, date, time, sessionType, notes, counselorName, appointmentId } = params;
   const isReschedule = !!appointmentId;
 
   const [loading, setLoading] = useState(false);
@@ -117,7 +117,8 @@ export default function BookingReviewScreen() {
       }
 
       const res = await studentService.bookAppointment({
-        counselorName: counselorName || 'Dr. Sarah Perera',
+        counselorId: counselorId || null,
+        counselorName: counselorName || 'Counselor',
         counselorSpecialization: 'Student Counselling',
         date: dateStr,
         time: timeStr,
@@ -176,7 +177,7 @@ export default function BookingReviewScreen() {
             <View style={styles.iconBox}><PersonIcon /></View>
             <View style={styles.detailContent}>
               <Text style={styles.detailLabel}>Counselor</Text>
-              <Text style={styles.detailValue}>{counselorName || 'Dr. Sarah Perera'}</Text>
+              <Text style={styles.detailValue}>{counselorName || 'Counselor'}</Text>
               <Text style={styles.detailSub}>Student Counselling</Text>
             </View>
           </View>

@@ -28,8 +28,8 @@ export default function BookAppointmentScreen() {
 
   const handleReviewBooking = () => {
     navigation.navigate('ReviewBooking', {
-      counselorId: String(counselorId || '1'),
-      counselorName: counselorName || 'Dr. Sarah Perera',
+      counselorId: String(counselorId || 'c1'),
+      counselorName: counselorName || 'Counselor',
       date: String(date || 'Mon, Oct 12'),
       time: String(time || '09:00 AM'),
       sessionType,
@@ -83,7 +83,7 @@ export default function BookAppointmentScreen() {
 
           <View style={styles.counselorInfo}>
             <Text style={styles.counselorName}>
-              Dr. Sarah Perera
+              {counselorName || 'Counselor'}
             </Text>
 
             <Text style={styles.specialization}>
@@ -91,7 +91,7 @@ export default function BookAppointmentScreen() {
             </Text>
 
             <Text style={styles.experience}>
-              8 years experience
+              Your selected counselor
             </Text>
           </View>
         </View>

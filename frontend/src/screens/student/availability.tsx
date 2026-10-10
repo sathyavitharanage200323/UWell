@@ -1,72 +1,124 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Pressable,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { studentService } from '../../services/studentService';
+
+const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+const timeToMinutes = (timeStr: string) => {
+  if (!timeStr) return 0;
+  const [time, period] = timeStr.split(' ');
+  let [hours, minutes] = time.split(':').map(Number);
+  if (period === 'PM' && hours !== 12) hours += 12;
+  if (period === 'AM' && hours === 12) hours = 0;
+  return hours * 60 + minutes;
+};
+
+const sortSlots = (slots: string[]) =>
+  [...slots].sort((a, b) => timeToMinutes(a) - timeToMinutes(b));
+
+const formatDateLabel = (d: Date) =>
+  `${WEEKDAY_SHORT[d.getDay()]}, ${MONTH_SHORT[d.getMonth()]} ${d.getDate()}`;
 
 export default function AvailabilityScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute();
   const params = route.params as {
-    counselorId?: number;
+    counselorId?: string;
     counselorName?: string;
     appointmentId?: string;
   } || {};
   const { counselorId, counselorName, appointmentId } = params;
   const isReschedule = !!appointmentId;
-  const id = String(counselorId || '1');
+  const id = String(counselorId || 'c1');
 
-  const [selectedDate, setSelectedDate] = useState('Mon, Oct 12');
+  const [availability, setAvailability] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  const [counselorLabel, setCounselorLabel] = useState(counselorName || '');
 
-  const dates = [
-    {
-      day: 'Mon',
-      date: '12',
-      month: 'Oct',
-    },
-    {
-      day: 'Tue',
-      date: '13',
-      month: 'Oct',
-    },
-    {
-      day: 'Wed',
-      date: '14',
-      month: 'Oct',
-    },
-    {
-      day: 'Thu',
-      date: '15',
-      month: 'Oct',
-    },
-    {
-      day: 'Fri',
-      date: '16',
-      month: 'Oct',
-    },
-  ];
+  useEffect(() => {
+    let active = true;
 
-  const timeSlots: Record<string, string[]> = {
-    '1': ['09:00 AM', '10:00 AM', '11:30 AM', '02:00 PM', '03:30 PM'],
-    '2': ['08:30 AM', '10:30 AM', '01:00 PM', '02:30 PM', '04:00 PM'],
-    '3': ['09:00 AM', '11:00 AM', '12:30 PM', '03:00 PM', '05:00 PM'],
-  };
+    const loadAvailability = async () => {
+      try {
+        setLoading(true);
+        const data = await studentService.getCounselorAvailability(id);
+        const list = Array.isArray(data) ? data : (data?.data || []);
+        if (active) setAvailability(list);
+      } catch (error) {
+        if (active) setAvailability([]);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
 
-  const slots = timeSlots[id] || timeSlots['1'];
+    loadAvailability();
+
+    if (!counselorName) {
+      studentService
+        .getCounselorById(id)
+        .then((c: any) => {
+          if (active && c?.name) setCounselorLabel(c.name);
+        })
+        .catch(() => {});
+    }
+
+    return () => {
+      active = false;
+    };
+  }, [id]);
+
+  const activeDays = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    availability.forEach((item) => {
+      if (item?.active && Array.isArray(item?.slots) && item.slots.length > 0) {
+        map[item.day] = sortSlots([...new Set(item.slots as string[])]);
+      }
+    });
+    return map;
+  }, [availability]);
+
+  const upcomingDays = useMemo(() => {
+    const days: Date[] = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    for (let i = 0; i < 21 && days.length < 5; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() + i);
+      if (activeDays[WEEKDAY_NAMES[d.getDay()]]) days.push(d);
+    }
+    return days;
+  }, [activeDays]);
+
+  useEffect(() => {
+    if (upcomingDays.length > 0 && !selectedDate) {
+      setSelectedDate(upcomingDays[0]);
+    }
+  }, [upcomingDays, selectedDate]);
+
+  const selectedDayName = selectedDate ? WEEKDAY_NAMES[selectedDate.getDay()] : '';
+  const slots = selectedDate && activeDays[selectedDayName] ? activeDays[selectedDayName] : [];
+  const hasAvailability = !!selectedDate && slots.length > 0;
 
   const handleContinue = () => {
-    if (!selectedTime) return;
+    if (!selectedTime || !selectedDate) return;
 
     navigation.navigate('BookAppointment', {
-      counselorId: Number(id),
-      counselorName: counselorName || 'Dr. Sarah Perera',
-      date: selectedDate,
+      counselorId: id,
+      counselorName: counselorLabel || 'Counselor',
+      date: formatDateLabel(selectedDate),
       time: selectedTime,
       appointmentId,
     });
@@ -113,7 +165,7 @@ export default function AvailabilityScreen() {
 
           <View style={styles.counselorInfo}>
             <Text style={styles.counselorName}>
-              Counselor
+              {counselorLabel || 'Counselor'}
             </Text>
 
             <Text style={styles.counselorText}>
@@ -121,102 +173,127 @@ export default function AvailabilityScreen() {
             </Text>
           </View>
 
-          <View style={styles.availableBadge}>
-            <View style={styles.availableDot} />
+          <View style={[styles.availableBadge, !hasAvailability && styles.unavailableBadge]}>
+            <View style={[styles.availableDot, !hasAvailability && styles.unavailableDot]} />
 
-            <Text style={styles.availableText}>
-              Available
+            <Text style={[styles.availableText, !hasAvailability && styles.unavailableText]}>
+              {hasAvailability ? 'Available' : 'No slots'}
             </Text>
           </View>
         </View>
 
-        {/* Date */}
-        <Text style={styles.sectionTitle}>
-          Select Date
-        </Text>
+        {loading ? (
+          <View style={styles.stateBox}>
+            <ActivityIndicator color="#EF806B" />
+            <Text style={styles.stateText}>Loading availability…</Text>
+          </View>
+        ) : upcomingDays.length === 0 ? (
+          <View style={styles.stateBox}>
+            <Text style={styles.stateEmoji}>📅</Text>
+            <Text style={styles.stateTitle}>No availability yet</Text>
+            <Text style={styles.stateText}>
+              This counselor hasn’t published any open slots. Please check back later.
+            </Text>
+          </View>
+        ) : (
+          <>
+            {/* Date */}
+            <Text style={styles.sectionTitle}>
+              Select Date
+            </Text>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.dateContainer}
-        >
-          {dates.map((date) => {
-            const dateValue = `${date.day}, ${date.month} ${date.date}`;
-            const isSelected = selectedDate === dateValue;
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.dateContainer}
+            >
+              {upcomingDays.map((date) => {
+                const dateValue = formatDateLabel(date);
+                const isSelected = selectedDate
+                  ? formatDateLabel(selectedDate) === dateValue
+                  : false;
 
-            return (
-              <Pressable
-                key={dateValue}
-                style={[
-                  styles.dateCard,
-                  isSelected && styles.selectedDateCard,
-                ]}
-                onPress={() => {
-                  setSelectedDate(dateValue);
-                  setSelectedTime(null);
-                }}
-              >
-                <Text
-                  style={[
-                    styles.dayText,
-                    isSelected && styles.selectedDateText,
-                  ]}
-                >
-                  {date.day}
-                </Text>
+                return (
+                  <Pressable
+                    key={dateValue}
+                    style={[
+                      styles.dateCard,
+                      isSelected && styles.selectedDateCard,
+                    ]}
+                    onPress={() => {
+                      setSelectedDate(date);
+                      setSelectedTime(null);
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.dayText,
+                        isSelected && styles.selectedDateText,
+                      ]}
+                    >
+                      {WEEKDAY_SHORT[date.getDay()]}
+                    </Text>
 
-                <Text
-                  style={[
-                    styles.dateText,
-                    isSelected && styles.selectedDateText,
-                  ]}
-                >
-                  {date.date}
-                </Text>
+                    <Text
+                      style={[
+                        styles.dateText,
+                        isSelected && styles.selectedDateText,
+                      ]}
+                    >
+                      {date.getDate()}
+                    </Text>
 
-                <Text
-                  style={[
-                    styles.monthText,
-                    isSelected && styles.selectedDateText,
-                  ]}
-                >
-                  {date.month}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+                    <Text
+                      style={[
+                        styles.monthText,
+                        isSelected && styles.selectedDateText,
+                      ]}
+                    >
+                      {MONTH_SHORT[date.getMonth()]}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
 
-        {/* Time */}
-        <Text style={styles.sectionTitle}>
-          Available Time Slots
-        </Text>
+            {/* Time */}
+            <Text style={styles.sectionTitle}>
+              Available Time Slots
+            </Text>
 
-        <View style={styles.timeGrid}>
-          {slots.map((time) => {
-            const isSelected = selectedTime === time;
+            {slots.length === 0 ? (
+              <Text style={styles.noSlotsText}>
+                No slots available on this date. Please pick another day.
+              </Text>
+            ) : (
+              <View style={styles.timeGrid}>
+                {slots.map((time) => {
+                  const isSelected = selectedTime === time;
 
-            return (
-              <Pressable
-                key={time}
-                style={[
-                  styles.timeButton,
-                  isSelected && styles.selectedTimeButton,
-                ]}
-                onPress={() => setSelectedTime(time)}
-              >
-                <Text
-                  style={[
-                    styles.timeText,
-                    isSelected && styles.selectedTimeText,
-                  ]}
-                >
-                  {time}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+                  return (
+                    <Pressable
+                      key={time}
+                      style={[
+                        styles.timeButton,
+                        isSelected && styles.selectedTimeButton,
+                      ]}
+                      onPress={() => setSelectedTime(time)}
+                    >
+                      <Text
+                        style={[
+                          styles.timeText,
+                          isSelected && styles.selectedTimeText,
+                        ]}
+                      >
+                        {time}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+          </>
+        )}
 
         {/* Reminder */}
         <View style={styles.reminderCard}>
@@ -362,6 +439,10 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
 
+  unavailableBadge: {
+    backgroundColor: '#F0EBE6',
+  },
+
   availableDot: {
     width: 6,
     height: 6,
@@ -370,10 +451,18 @@ const styles = StyleSheet.create({
     marginRight: 5,
   },
 
+  unavailableDot: {
+    backgroundColor: '#B39D96',
+  },
+
   availableText: {
     color: '#65A870',
     fontSize: 9,
     fontWeight: '700',
+  },
+
+  unavailableText: {
+    color: '#8A7770',
   },
 
   sectionTitle: {
@@ -460,6 +549,43 @@ const styles = StyleSheet.create({
   selectedTimeText: {
     color: '#C85F4E',
     fontWeight: '700',
+  },
+
+  noSlotsText: {
+    color: '#8A7770',
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 20,
+  },
+
+  stateBox: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 28,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#F0E2DC',
+    marginBottom: 22,
+  },
+
+  stateEmoji: {
+    fontSize: 32,
+    marginBottom: 10,
+  },
+
+  stateTitle: {
+    color: '#3B2925',
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+
+  stateText: {
+    color: '#8A7770',
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: 'center',
+    marginTop: 10,
   },
 
   reminderCard: {
