@@ -4,7 +4,13 @@ const Counselor = require('../../models/counselor/Counselor');
 const Welfare = require('../../models/welfare/Welfare');
 const Student = require('../../models/student/Student');
 const Appointment = require('../../models/counselor/Appointment');
+const UsageReport = require('../../models/management/UsageReport');
+const ServiceNote = require('../../models/management/ServiceNote');
 const ManagementSettings = require('../../models/management/ManagementSettings');
+const { sendNotification } = require('../../utils/notificationHelper');
+
+// Reject malformed ids up front so they return a clean 400/404 instead of a CastError 500
+const isValidId = (id) => /^[a-f\d]{24}$/i.test(String(id));
 
 const signToken = (id, role) => {
   return jwt.sign({ id, role }, process.env.JWT_SECRET, {
@@ -78,38 +84,17 @@ exports.loginManagement = async (req, res) => {
       ],
     }).select('+password');
 
-    // Default admin fallback auto-seed if logging in for first time with admin or manager email
-    if (!manager && (emailLower === 'admin@university.edu' || idUpper === 'ADM001' || emailLower === 'manager@gmail.com' || emailLower === 'me@gmail.com')) {
-      manager = await Management.create({
-        firstName: 'System',
-        lastName: 'Manager',
-        employeeId: idUpper.startsWith('ADM') || idUpper.startsWith('MGR') ? idUpper : 'ADM001',
-        email: emailLower,
-        department: 'Administration',
-        position: 'System Administrator',
-        password: password,
-        role: 'management',
-        isApproved: true,
-      });
-    }
-
     if (!manager) {
-      return res.status(401).json({ success: false, message: 'Invalid credentials. Please check your email or employee ID.' });
+      return res.status(401).json({ success: false, message: 'Invalid credentials. Please check your email or employee ID and password.' });
     }
 
-    // Verify password, with forgiving fallback for standard test passwords
-    let isMatch = await manager.comparePassword(password);
-    const standardPasswords = ['password123', 'Password123!', 'admin123', 'Admin123!', '12345678', '123456'];
-    if (!isMatch && standardPasswords.includes(password)) {
-      isMatch = true;
-      manager.password = password;
-    }
-
+    const isMatch = await manager.comparePassword(password);
     if (!isMatch) {
-      return res.status(401).json({ success: false, message: 'Invalid password. (Use password123)' });
+      return res.status(401).json({ success: false, message: 'Invalid credentials. Please check your email or employee ID and password.' });
     }
 
     manager.lastLogin = new Date();
+    manager.loginHistory = [...(manager.loginHistory || []), { at: manager.lastLogin }].slice(-5);
     await manager.save({ validateBeforeSave: false });
 
     const token = signToken(manager._id, 'management');
@@ -191,7 +176,12 @@ exports.getAllRequests = async (req, res) => {
   try {
     const { status, role } = req.query;
     const filter = {};
-    if (status) filter.approvalStatus = status;
+    if (status) {
+      if (!['pending', 'approved', 'rejected'].includes(status)) {
+        return res.status(400).json({ success: false, message: 'Status must be pending, approved or rejected' });
+      }
+      filter.approvalStatus = status;
+    }
 
     let counselors = [];
     let welfareOfficers = [];
@@ -257,113 +247,66 @@ exports.getAllRequests = async (req, res) => {
   }
 };
 
-// ── Approve Request ───────────────────────────────────────────────────────────
-exports.approveRequest = async (req, res) => {
+// ── Approve / Reject Request ──────────────────────────────────────────────────
+// Management can approve a pending request, reject one, change a rejection to an
+// approval, or revoke an approval, so the previous status is not restricted.
+const reviewRequest = async (req, res, decision) => {
   try {
     const targetId = req.body.userId || req.body.id || req.body._id;
-    const rawRole = (req.body.role || '').toLowerCase().trim();
+    const rawRole = String(req.body.role || '').toLowerCase();
 
     if (!targetId) {
       return res.status(400).json({ success: false, message: 'User ID is required' });
     }
-
-    const isCounselor = rawRole.includes('counselor');
-    let Model = isCounselor ? Counselor : Welfare;
-    let actualRole = isCounselor ? 'counselor' : 'welfare';
-
-    let user = await Model.findById(targetId);
-    if (!user) {
-      // Fallback: search the other collection in case role was omitted or mismatched
-      const AltModel = isCounselor ? Welfare : Counselor;
-      const altUser = await AltModel.findById(targetId);
-      if (altUser) {
-        Model = AltModel;
-        user = altUser;
-        actualRole = isCounselor ? 'welfare' : 'counselor';
-      }
+    if (!isValidId(targetId)) {
+      return res.status(400).json({ success: false, message: 'Invalid user ID' });
     }
 
+    let Model = null;
+    let actualRole = '';
+    if (rawRole.includes('counselor')) { Model = Counselor; actualRole = 'counselor'; }
+    else if (rawRole.includes('welfare')) { Model = Welfare; actualRole = 'welfare'; }
+    if (!Model) {
+      return res.status(400).json({ success: false, message: 'Role must be counselor or welfare' });
+    }
+
+    const user = await Model.findById(targetId);
     if (!user) {
       return res.status(404).json({ success: false, message: 'User account not found' });
     }
 
-    const updatedUser = await Model.findByIdAndUpdate(
-      user._id,
-      {
-        $set: {
-          approvalStatus: 'approved',
-          isApproved: true,
-          approvedAt: new Date(),
-          approvedBy: req.user?.id || 'Admin',
-          rejectionReason: '',
-        },
-      },
-      { new: true, runValidators: false }
-    );
-
-    res.status(200).json({
-      success: true,
-      message: `${updatedUser.fullName || updatedUser.firstName} (${actualRole}) has been approved successfully. They can now log in.`,
-      user: updatedUser.toSafeObject ? updatedUser.toSafeObject() : updatedUser,
-    });
-  } catch (error) {
-    console.error('❌ approveRequest error:', error);
-    res.status(500).json({ success: false, message: error.message || 'Server error approving request' });
-  }
-};
-
-// ── Reject Request ────────────────────────────────────────────────────────────
-exports.rejectRequest = async (req, res) => {
-  try {
-    const targetId = req.body.userId || req.body.id || req.body._id;
-    const rawRole = (req.body.role || '').toLowerCase().trim();
-    const reason = req.body.reason || 'Registration rejected by administrator.';
-
-    if (!targetId) {
-      return res.status(400).json({ success: false, message: 'User ID is required' });
-    }
-
-    const isCounselor = rawRole.includes('counselor');
-    let Model = isCounselor ? Counselor : Welfare;
-    let actualRole = isCounselor ? 'counselor' : 'welfare';
-
-    let user = await Model.findById(targetId);
-    if (!user) {
-      const AltModel = isCounselor ? Welfare : Counselor;
-      const altUser = await AltModel.findById(targetId);
-      if (altUser) {
-        Model = AltModel;
-        user = altUser;
-        actualRole = isCounselor ? 'welfare' : 'counselor';
+    const update = decision === 'approved'
+      ? {
+        approvalStatus: 'approved',
+        isApproved: true,
+        approvedAt: new Date(),
+        approvedBy: req.user.id,
+        rejectionReason: '',
       }
-    }
+      : {
+        approvalStatus: 'rejected',
+        isApproved: false,
+        rejectionReason: String(req.body.reason || '').trim().slice(0, 300) || 'Registration rejected by administrator.',
+      };
 
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User account not found' });
-    }
-
-    const updatedUser = await Model.findByIdAndUpdate(
-      user._id,
-      {
-        $set: {
-          approvalStatus: 'rejected',
-          isApproved: false,
-          rejectionReason: reason,
-        },
-      },
-      { new: true, runValidators: false }
-    );
+    const updatedUser = await Model.findByIdAndUpdate(user._id, { $set: update }, { new: true, runValidators: false });
+    const name = updatedUser.fullName || updatedUser.firstName;
 
     res.status(200).json({
       success: true,
-      message: `${updatedUser.fullName || updatedUser.firstName} (${actualRole}) registration request has been rejected.`,
+      message: decision === 'approved'
+        ? `${name} (${actualRole}) has been approved successfully. They can now log in.`
+        : `${name} (${actualRole}) registration request has been rejected.`,
       user: updatedUser.toSafeObject ? updatedUser.toSafeObject() : updatedUser,
     });
   } catch (error) {
-    console.error('❌ rejectRequest error:', error);
-    res.status(500).json({ success: false, message: error.message || 'Server error rejecting request' });
+    console.error(`❌ ${decision} request error:`, error);
+    res.status(500).json({ success: false, message: 'Server error reviewing request' });
   }
 };
+
+exports.approveRequest = (req, res) => reviewRequest(req, res, 'approved');
+exports.rejectRequest = (req, res) => reviewRequest(req, res, 'rejected');
 
 // ── Dashboard Overview Stats ──────────────────────────────────────────────────
 exports.getDashboardStats = async (req, res) => {
@@ -403,35 +346,9 @@ exports.getDashboardStats = async (req, res) => {
 // ── Management Profile & Logout ───────────────────────────────────────────────
 exports.getManagementProfile = async (req, res) => {
   try {
-    const { id, email } = req.query;
-    let query = {};
-    if (id) {
-      query._id = id;
-    } else if (email) {
-      query.email = email.trim().toLowerCase();
-    } else if (req.user?.id) {
-      query._id = req.user.id;
-    } else {
-      query.email = 'admin@university.edu';
-    }
-
-    let manager = await Management.findOne(query);
+    const manager = await Management.findById(req.user.id);
     if (!manager) {
-      manager = await Management.findOne({ email: 'admin@university.edu' });
-    }
-
-    if (!manager) {
-      manager = await Management.create({
-        firstName: 'Admin',
-        lastName: 'Manager',
-        employeeId: 'ADM001',
-        email: email?.trim().toLowerCase() || 'admin@university.edu',
-        department: 'Administration',
-        position: 'System Administrator',
-        password: 'password123',
-        role: 'management',
-        isApproved: true,
-      });
+      return res.status(404).json({ success: false, message: 'Management account not found' });
     }
 
     res.status(200).json({
@@ -446,36 +363,26 @@ exports.getManagementProfile = async (req, res) => {
 
 exports.updateManagementProfile = async (req, res) => {
   try {
-    const { id, email, firstName, lastName, phone, department, position } = req.body;
-    let query = {};
-    if (id) query._id = id;
-    else if (email) query.email = email.trim().toLowerCase();
-    else if (req.user?.id) query._id = req.user.id;
-    else query.email = 'admin@university.edu';
+    const { firstName, lastName, phone, department, position } = req.body;
 
-    let manager = await Management.findOne(query);
-    if (!manager) {
-      manager = await Management.findOne({ email: 'admin@university.edu' });
+    if ([firstName, lastName].some((v) => v !== undefined && String(v).trim().length > 50)) {
+      return res.status(400).json({ success: false, message: 'Names cannot exceed 50 characters' });
+    }
+    if ([department, position].some((v) => v !== undefined && String(v).trim().length > 100)) {
+      return res.status(400).json({ success: false, message: 'Department and position cannot exceed 100 characters' });
+    }
+    if (phone !== undefined && String(phone).trim() && !/^\+?[\d\s\-()]{7,20}$/.test(String(phone).trim())) {
+      return res.status(400).json({ success: false, message: 'Enter a valid phone number (7 to 20 digits, spaces, dashes or +)' });
     }
 
+    const manager = await Management.findById(req.user.id);
     if (!manager) {
-      manager = await Management.create({
-        firstName: firstName ? firstName.trim() : 'Admin',
-        lastName: lastName ? lastName.trim() : 'Manager',
-        employeeId: 'ADM001',
-        email: email?.trim().toLowerCase() || 'admin@university.edu',
-        department: department ? department.trim() : 'Administration',
-        position: position ? position.trim() : 'System Administrator',
-        phone: phone ? phone.trim() : '',
-        password: 'password123',
-        role: 'management',
-        isApproved: true,
-      });
+      return res.status(404).json({ success: false, message: 'Management account not found' });
     }
 
     if (firstName) manager.firstName = firstName.trim();
     if (lastName) manager.lastName = lastName.trim();
-    if (phone !== undefined) manager.phone = phone.trim();
+    if (phone !== undefined) manager.phone = String(phone).trim();
     if (department) manager.department = department.trim();
     if (position) manager.position = position.trim();
 
@@ -537,6 +444,8 @@ const findUserAcrossCollections = async (id, roleHint) => {
   const candidates = roleHint
     ? USER_MODELS.filter((m) => m.role === String(roleHint).toLowerCase())
     : USER_MODELS;
+
+  if (!isValidId(id)) return null;
 
   for (const { role, Model } of candidates) {
     const doc = await Model.findById(id);
@@ -655,175 +564,338 @@ exports.getManagementDashboard = async (req, res) => {
   }
 };
 
-// ── All Appointments (management view) ────────────────────────────────────────
+// ── Appointment Summary ───────────────────────────────────────────────────────
+// Appointments are stored with mixed status spellings, so map them to four buckets.
+const normaliseStatus = (status = '') => {
+  const v = String(status).toLowerCase().trim();
+  if (['completed', 'done'].includes(v)) return 'completed';
+  if (['cancelled', 'canceled'].includes(v)) return 'cancelled';
+  if (['in session', 'in_session', 'ongoing'].includes(v)) return 'in session';
+  return 'upcoming';
+};
+
+const MANAGED_STATUSES = ['upcoming', 'completed', 'cancelled'];
+
+// sendNotification stores the notification and pushes it over the socket; it never throws,
+// so a notification problem cannot fail the appointment update itself
+const notify = (recipientId, recipientType, title, message, type, appointmentId) =>
+  sendNotification(recipientId, recipientType, title, message, type, appointmentId);
+
+const STATUS_NOTICE = {
+  cancelled: { title: 'Appointment Cancelled', type: 'appointment_cancelled', verb: 'has been cancelled by management' },
+  completed: { title: 'Appointment Completed', type: 'appointment_updated', verb: 'has been marked as completed' },
+  upcoming: { title: 'Appointment Reopened', type: 'appointment_updated', verb: 'has been set back to upcoming' },
+};
+
+// Student bookings store a reference to the student, not their name, so the name
+// is looked up from the populated student record when it was not saved on the booking.
+const withStudent = (query) => query.populate('student', 'firstName lastName');
+
+const studentNameOf = (a) => {
+  if (a.studentName && a.studentName !== 'Student') return a.studentName;
+  if (a.student && a.student.firstName) return `${a.student.firstName} ${a.student.lastName || ''}`.trim();
+  return 'Student';
+};
+
+const formatAppointment = (a) => ({
+  id: a._id,
+  studentName: studentNameOf(a),
+  counselorName: a.counselorName,
+  specialization: a.counselorSpecialization,
+  date: a.date,
+  time: a.time,
+  sessionType: a.sessionType,
+  notes: a.notes || '',
+  status: normaliseStatus(a.status),
+});
+
 exports.getManagementAppointments = async (req, res) => {
   try {
-    const appointments = await Appointment.find()
-      .populate('student', 'firstName lastName studentId email faculty degreeProgram yearOfStudy phone')
-      .populate('counselor', 'firstName lastName staffId email specialization officeLocation phone')
-      .sort({ createdAt: -1 });
+    const { status, search } = req.query;
+    const all = (await withStudent(Appointment.find().sort({ createdAt: -1 }))).map(formatAppointment);
 
-    const mapped = appointments.map((a) => {
-      const studentName =
-        a.studentName ||
-        (a.student ? `${a.student.firstName || ''} ${a.student.lastName || ''}`.trim() : 'Unknown Student');
-      const counselorName =
-        a.counselorName ||
-        (a.counselor ? `${a.counselor.firstName || ''} ${a.counselor.lastName || ''}`.trim() : 'Unknown Counselor');
+    const summary = { total: all.length, upcoming: 0, 'in session': 0, completed: 0, cancelled: 0 };
+    all.forEach((a) => { summary[a.status] += 1; });
 
-      return {
-        _id: a._id.toString(),
-        id: a._id.toString(),
-        studentId: a.student?._id?.toString() || null,
-        studentName,
-        studentRegNo: a.student?.studentId || '',
-        studentEmail: a.student?.email || '',
-        studentFaculty: a.student?.faculty || '',
-        studentDegree: a.student?.degreeProgram || '',
-        studentYear: a.student?.yearOfStudy || '',
-        studentPhone: a.student?.phone || '',
-        counselorId: a.counselor?._id?.toString() || null,
-        counselorName,
-        counselorEmail: a.counselor?.email || '',
-        counselorPhone: a.counselor?.phone || '',
-        counselorSpecialization: a.counselorSpecialization || a.counselor?.specialization || 'Student Counselling',
-        counselorOffice: a.counselor?.officeLocation || '',
-        date: a.date,
-        time: a.time,
-        sessionType: a.sessionType,
-        status: a.status,
-        notes: a.notes || '',
-        createdAt: a.createdAt,
-        updatedAt: a.updatedAt,
-      };
+    const term = (search || '').trim().toLowerCase();
+    const appointments = all.filter((a) => {
+      if (status && status !== 'all' && a.status !== status) return false;
+      if (!term) return true;
+      return [a.studentName, a.counselorName, a.specialization]
+        .some((v) => (v || '').toLowerCase().includes(term));
     });
 
-    res.status(200).json({ success: true, count: mapped.length, appointments: mapped });
+    res.status(200).json({ success: true, summary, count: appointments.length, appointments });
   } catch (error) {
     console.error('❌ getManagementAppointments error:', error);
     res.status(500).json({ success: false, message: 'Server error fetching appointments' });
   }
 };
 
-// ── Usage Details ─────────────────────────────────────────────────────────────
-exports.getUsageDetails = async (req, res) => {
+exports.updateManagementAppointment = async (req, res) => {
   try {
-    const startOfMonth = new Date();
-    startOfMonth.setDate(1);
-    startOfMonth.setHours(0, 0, 0, 0);
+    const { status, notes } = req.body;
 
-    const [
-      totalStudents,
-      totalCounselors,
-      totalWelfare,
-      totalManagement,
-      activeStudents,
-      activeCounselors,
-      activeWelfare,
-      activeManagement,
-      newStudents,
-      newCounselors,
-      newWelfare,
-      newManagement,
-      totalAppointments,
-      appointments,
-    ] = await Promise.all([
-      Student.countDocuments({}),
-      Counselor.countDocuments({}),
-      Welfare.countDocuments({}),
-      Management.countDocuments({}),
-      Student.countDocuments({ isActive: true }),
-      Counselor.countDocuments({ isActive: true }),
-      Welfare.countDocuments({ isActive: true }),
-      Management.countDocuments({ isActive: true }),
-      Student.countDocuments({ createdAt: { $gte: startOfMonth } }),
-      Counselor.countDocuments({ createdAt: { $gte: startOfMonth } }),
-      Welfare.countDocuments({ createdAt: { $gte: startOfMonth } }),
-      Management.countDocuments({ createdAt: { $gte: startOfMonth } }),
-      Appointment.countDocuments({}),
-      Appointment.find().select('time status').lean(),
-    ]);
+    if (status === undefined && notes === undefined) {
+      return res.status(400).json({ success: false, message: 'Provide a status or notes to update' });
+    }
+    if (status !== undefined && !MANAGED_STATUSES.includes(status)) {
+      return res.status(400).json({ success: false, message: `Status must be one of: ${MANAGED_STATUSES.join(', ')}` });
+    }
 
-    const totalUsers = totalStudents + totalCounselors + totalWelfare + totalManagement;
-    const activeUsers = activeStudents + activeCounselors + activeWelfare + activeManagement;
-    const newUsersThisMonth = newStudents + newCounselors + newWelfare + newManagement;
-    const averageSessionsPerUser = totalUsers > 0 ? Number((totalAppointments / totalUsers).toFixed(1)) : 0;
+    if (!isValidId(req.params.id)) {
+      return res.status(404).json({ success: false, message: 'Appointment not found' });
+    }
+    const appointment = await withStudent(Appointment.findById(req.params.id));
+    if (!appointment) {
+      return res.status(404).json({ success: false, message: 'Appointment not found' });
+    }
 
-    // Department breakdown by role
-    const deptCounts = [
-      { department: 'Counseling', count: totalCounselors + activeStudents },
-      { department: 'Welfare', count: totalWelfare },
-      { department: 'Management', count: totalManagement },
-    ];
-    const deptTotal = deptCounts.reduce((sum, d) => sum + d.count, 0) || 1;
-    const departmentUsage = deptCounts.map((d) => ({
-      department: d.department,
-      sessions: d.count,
-      percentage: Math.round((d.count / deptTotal) * 100),
-    }));
+    const previousStatus = normaliseStatus(appointment.status);
+    if (status !== undefined) appointment.status = status;
+    if (notes !== undefined) appointment.notes = String(notes).trim().slice(0, 500);
+    await appointment.save({ validateModifiedOnly: true });
 
-    // Peak usage time — most frequent appointment slot
-    const timeFrequency = {};
-    appointments.forEach((a) => {
-      if (!a.time) return;
-      timeFrequency[a.time] = (timeFrequency[a.time] || 0) + 1;
-    });
-    const peakTimeEntry = Object.entries(timeFrequency).sort((a, b) => b[1] - a[1])[0];
-    const peakUsageTime = peakTimeEntry ? peakTimeEntry[0] : '2:00 PM - 4:00 PM';
-
-    const mostActiveDepartment =
-      departmentUsage.slice().sort((a, b) => b.sessions - a.sessions)[0]?.department || 'Counseling';
+    // Tell the student (and the counselor, when linked) about a real status change
+    if (status !== undefined && status !== previousStatus) {
+      const notice = STATUS_NOTICE[status];
+      const when = [appointment.date, appointment.time].filter(Boolean).join(' at ');
+      const studentId = appointment.student && (appointment.student._id || appointment.student);
+      if (studentId) {
+        await notify(studentId, 'student', notice.title,
+          `Your appointment with ${appointment.counselorName}${when ? ` on ${when}` : ''} ${notice.verb}.`,
+          notice.type, appointment._id);
+      }
+      if (appointment.counselor) {
+        await notify(appointment.counselor, 'counselor', notice.title,
+          `The session with ${studentNameOf(appointment)}${when ? ` on ${when}` : ''} ${notice.verb}.`,
+          notice.type, appointment._id);
+      }
+    }
 
     res.status(200).json({
       success: true,
-      usageData: {
-        totalUsers,
-        activeUsers,
-        newUsersThisMonth,
-        averageSessionsPerUser,
-        mostActiveDepartment,
-        peakUsageTime,
+      message: 'Appointment updated successfully',
+      appointment: formatAppointment(appointment),
+    });
+  } catch (error) {
+    console.error('❌ updateManagementAppointment error:', error);
+    res.status(500).json({ success: false, message: 'Server error updating appointment' });
+  }
+};
+
+// ── Usage Reports ─────────────────────────────────────────────────────────────
+const rangeStart = (range) => {
+  const now = new Date();
+  switch (range) {
+    case 'This Week': {
+      const d = new Date(now);
+      d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // Monday
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
+    case 'This Quarter':
+      return new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+    case 'This Year':
+      return new Date(now.getFullYear(), 0, 1);
+    default:
+      return new Date(now.getFullYear(), now.getMonth(), 1);
+  }
+};
+
+const groupBy = (items, keyFn) => {
+  const map = new Map();
+  items.forEach((item) => {
+    const key = keyFn(item) || 'Unspecified';
+    map.set(key, [...(map.get(key) || []), item]);
+  });
+  return [...map.entries()];
+};
+
+const buildUsageReport = async (type, range) => {
+  const since = rangeStart(range);
+  const appointments = (await withStudent(Appointment.find({ createdAt: { $gte: since } }))).map(formatAppointment);
+  const count = (list, st) => list.filter((a) => a.status === st).length;
+
+  if (type === 'Appointments') {
+    return {
+      totalRecords: appointments.length,
+      summary: [
+        { label: 'Total', value: appointments.length },
+        { label: 'Upcoming', value: count(appointments, 'upcoming') + count(appointments, 'in session') },
+        { label: 'Completed', value: count(appointments, 'completed') },
+        { label: 'Cancelled', value: count(appointments, 'cancelled') },
+      ],
+      rows: groupBy(appointments, (a) => a.sessionType).map(([label, list]) => ({
+        label, value: list.length, detail: 'sessions by type',
+      })),
+    };
+  }
+
+  if (type === 'Department Usage') {
+    const groups = groupBy(appointments, (a) => a.specialization);
+    return {
+      totalRecords: appointments.length,
+      summary: [
+        { label: 'Departments', value: groups.length },
+        { label: 'Appointments', value: appointments.length },
+      ],
+      rows: groups.map(([label, list]) => ({
+        label, value: list.length, detail: `${count(list, 'completed')} completed`,
+      })).sort((a, b) => b.value - a.value),
+    };
+  }
+
+  if (type === 'Counselor Performance') {
+    const groups = groupBy(appointments, (a) => a.counselorName);
+    return {
+      totalRecords: appointments.length,
+      summary: [
+        { label: 'Counselors', value: groups.length },
+        { label: 'Completed', value: count(appointments, 'completed') },
+        { label: 'Cancelled', value: count(appointments, 'cancelled') },
+      ],
+      rows: groups.map(([label, list]) => ({
+        label,
+        value: list.length,
+        detail: `${Math.round((count(list, 'completed') / list.length) * 100)}% completed`,
+      })).sort((a, b) => b.value - a.value),
+    };
+  }
+
+  // User Activity
+  const [newStudents, activeStudents, counselors, welfare] = await Promise.all([
+    Student.countDocuments({ createdAt: { $gte: since } }),
+    Student.countDocuments({ isActive: true }),
+    Counselor.countDocuments({ approvalStatus: 'approved' }),
+    Welfare.countDocuments({ approvalStatus: 'approved' }),
+  ]);
+  return {
+    totalRecords: activeStudents + counselors + welfare,
+    summary: [
+      { label: 'Active students', value: activeStudents },
+      { label: 'New students', value: newStudents },
+      { label: 'Counselors', value: counselors },
+      { label: 'Welfare officers', value: welfare },
+    ],
+    rows: groupBy(appointments, (a) => a.studentName).map(([label, list]) => ({
+      label, value: list.length, detail: 'bookings in period',
+    })).sort((a, b) => b.value - a.value).slice(0, 5),
+  };
+};
+
+const validateReportInput = (type, range) => {
+  if (!UsageReport.REPORT_TYPES.includes(type)) return `Report type must be one of: ${UsageReport.REPORT_TYPES.join(', ')}`;
+  if (!UsageReport.DATE_RANGES.includes(range)) return `Date range must be one of: ${UsageReport.DATE_RANGES.join(', ')}`;
+  return null;
+};
+
+exports.generateUsageReport = async (req, res) => {
+  try {
+    const { type, range } = req.body;
+    const problem = validateReportInput(type, range);
+    if (problem) return res.status(400).json({ success: false, message: problem });
+
+    const report = await buildUsageReport(type, range);
+    res.status(200).json({ success: true, report: { type, range, generatedAt: new Date(), ...report } });
+  } catch (error) {
+    console.error('❌ generateUsageReport error:', error);
+    res.status(500).json({ success: false, message: 'Server error generating report' });
+  }
+};
+
+exports.saveUsageReport = async (req, res) => {
+  try {
+    const { type, range } = req.body;
+    const problem = validateReportInput(type, range);
+    if (problem) return res.status(400).json({ success: false, message: problem });
+
+    // Rebuilt on the server so a saved report always reflects real data
+    const built = await buildUsageReport(type, range);
+    const saved = await UsageReport.create({ type, range, ...built, generatedBy: req.user.id });
+    res.status(201).json({ success: true, message: 'Report saved', report: saved });
+  } catch (error) {
+    console.error('❌ saveUsageReport error:', error);
+    res.status(500).json({ success: false, message: 'Server error saving report' });
+  }
+};
+
+exports.getSavedReports = async (req, res) => {
+  try {
+    const reports = await UsageReport.find({ generatedBy: req.user.id }).sort({ createdAt: -1 }).limit(20);
+    res.status(200).json({ success: true, count: reports.length, reports });
+  } catch (error) {
+    console.error('❌ getSavedReports error:', error);
+    res.status(500).json({ success: false, message: 'Server error fetching saved reports' });
+  }
+};
+
+exports.deleteSavedReport = async (req, res) => {
+  try {
+    if (!isValidId(req.params.id)) return res.status(404).json({ success: false, message: 'Report not found' });
+    const deleted = await UsageReport.findOneAndDelete({ _id: req.params.id, generatedBy: req.user.id });
+    if (!deleted) return res.status(404).json({ success: false, message: 'Report not found' });
+    res.status(200).json({ success: true, message: 'Report deleted' });
+  } catch (error) {
+    console.error('❌ deleteSavedReport error:', error);
+    res.status(500).json({ success: false, message: 'Server error deleting report' });
+  }
+};
+
+// ── Usage Details ─────────────────────────────────────────────────────────────
+exports.getUsageDetails = async (req, res) => {
+  try {
+    const monthStart = rangeStart('This Month');
+    const [appointmentDocs, activeStudents, newStudents, counselors, welfare, notes] = await Promise.all([
+      withStudent(Appointment.find()),
+      Student.countDocuments({ isActive: true }),
+      Student.countDocuments({ createdAt: { $gte: monthStart } }),
+      Counselor.countDocuments({ approvalStatus: 'approved' }),
+      Welfare.countDocuments({ approvalStatus: 'approved' }),
+      ServiceNote.find().sort({ createdAt: -1 }).limit(30),
+    ]);
+    const appointments = appointmentDocs.map(formatAppointment);
+    const total = appointments.length;
+    const count = (list, st) => list.filter((a) => a.status === st).length;
+
+    const departments = groupBy(appointments, (a) => a.specialization)
+      .map(([department, list]) => ({
+        department,
+        sessions: list.length,
+        completed: count(list, 'completed'),
+        cancelled: count(list, 'cancelled'),
+        percentage: total ? Math.round((list.length / total) * 100) : 0,
+      }))
+      .sort((a, b) => b.sessions - a.sessions);
+
+    const timeSlots = groupBy(appointments, (a) => a.time).sort((a, b) => b[1].length - a[1].length);
+
+    res.status(200).json({
+      success: true,
+      overview: {
+        totalUsers: activeStudents + counselors + welfare,
+        activeStudents,
+        newStudentsThisMonth: newStudents,
+        totalAppointments: total,
+        avgAppointmentsPerStudent: activeStudents ? Math.round((total / activeStudents) * 10) / 10 : 0,
       },
-      departmentUsage,
+      insights: {
+        mostActiveDepartment: departments[0] ? departments[0].department : 'No data',
+        peakTime: timeSlots[0] ? timeSlots[0][0] : 'No data',
+      },
+      departments,
+      notes: notes.map((n) => ({
+        id: n._id,
+        department: n.department,
+        text: n.text,
+        authorName: n.authorName,
+        mine: String(n.createdBy) === String(req.user.id),
+        createdAt: n.createdAt,
+      })),
     });
   } catch (error) {
     console.error('❌ getUsageDetails error:', error);
     res.status(500).json({ success: false, message: 'Server error fetching usage details' });
-  }
-};
-
-// ── Generate Usage Report ─────────────────────────────────────────────────────
-exports.generateUsageReport = async (req, res) => {
-  try {
-    const { dateRange = 'This Month', reportType = 'Appointments' } = req.body || {};
-
-    const [totalAppointments, completedAppointments, cancelledAppointments, totalStudents] = await Promise.all([
-      Appointment.countDocuments({}),
-      Appointment.countDocuments({ status: { $in: ['completed', 'Completed', 'done'] } }),
-      Appointment.countDocuments({ status: { $in: ['cancelled', 'Cancelled', 'canceled'] } }),
-      Student.countDocuments({}),
-    ]);
-
-    const totalRecords = reportType === 'User Activity' ? totalStudents : totalAppointments;
-    const completionRate =
-      totalAppointments > 0 ? Math.round((completedAppointments / totalAppointments) * 100) : 0;
-    // Satisfaction proxy derived from completion vs cancellation (no rating field exists yet).
-    const denominator = completedAppointments + cancelledAppointments;
-    const avgRating = denominator > 0 ? Number((3.5 + (completedAppointments / denominator) * 1.5).toFixed(1)) : 0;
-
-    res.status(200).json({
-      success: true,
-      filters: { dateRange, reportType },
-      preview: {
-        totalRecords,
-        completionRate,
-        avgRating,
-      },
-      generatedAt: new Date().toISOString(),
-    });
-  } catch (error) {
-    console.error('❌ generateUsageReport error:', error);
-    res.status(500).json({ success: false, message: 'Server error generating usage report' });
   }
 };
 
@@ -975,5 +1047,110 @@ exports.updateSystemSettings = async (req, res) => {
   } catch (error) {
     console.error('❌ updateSystemSettings error:', error);
     res.status(500).json({ success: false, message: error.message || 'Server error updating system settings' });
+  }
+};
+
+exports.addServiceNote = async (req, res) => {
+  try {
+    const department = String(req.body.department || '').trim();
+    const text = String(req.body.text || '').trim();
+    if (!department || !text) {
+      return res.status(400).json({ success: false, message: 'Department and note text are required' });
+    }
+    if (text.length > 300) {
+      return res.status(400).json({ success: false, message: 'Notes cannot exceed 300 characters' });
+    }
+
+    const manager = await Management.findById(req.user.id);
+    const note = await ServiceNote.create({
+      department,
+      text,
+      createdBy: req.user.id,
+      authorName: manager ? manager.fullName : '',
+    });
+    res.status(201).json({ success: true, message: 'Note added', note });
+  } catch (error) {
+    console.error('❌ addServiceNote error:', error);
+    res.status(500).json({ success: false, message: 'Server error adding note' });
+  }
+};
+
+exports.deleteServiceNote = async (req, res) => {
+  try {
+    if (!isValidId(req.params.id)) {
+      return res.status(404).json({ success: false, message: 'Note not found, or it belongs to another manager' });
+    }
+    const deleted = await ServiceNote.findOneAndDelete({ _id: req.params.id, createdBy: req.user.id });
+    if (!deleted) {
+      return res.status(404).json({ success: false, message: 'Note not found, or it belongs to another manager' });
+    }
+    res.status(200).json({ success: true, message: 'Note deleted' });
+  } catch (error) {
+    console.error('❌ deleteServiceNote error:', error);
+    res.status(500).json({ success: false, message: 'Server error deleting note' });
+  }
+};
+
+// ── Privacy & Security ────────────────────────────────────────────────────────
+exports.getSecurityInfo = async (req, res) => {
+  try {
+    const manager = await Management.findById(req.user.id);
+    if (!manager) {
+      return res.status(404).json({ success: false, message: 'Management account not found' });
+    }
+
+    res.status(200).json({
+      success: true,
+      account: {
+        fullName: manager.fullName,
+        email: manager.email,
+        employeeId: manager.employeeId,
+        createdAt: manager.createdAt,
+        lastLogin: manager.lastLogin,
+        passwordChangedAt: manager.passwordChangedAt,
+      },
+      recentLogins: (manager.loginHistory || []).map((l) => l.at).reverse(),
+    });
+  } catch (error) {
+    console.error('❌ getSecurityInfo error:', error);
+    res.status(500).json({ success: false, message: 'Server error fetching security information' });
+  }
+};
+
+exports.changePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ success: false, message: 'Current and new password are required' });
+    }
+    // Same strength rules as registration, so a password cannot be weakened afterwards
+    const pw = String(newPassword);
+    if (pw.length < 8 || !/[A-Z]/.test(pw) || !/[a-z]/.test(pw) || !/\d/.test(pw) || !/[^A-Za-z0-9]/.test(pw)) {
+      return res.status(400).json({
+        success: false,
+        message: 'New password must be at least 8 characters with an uppercase letter, a lowercase letter, a number and a special character',
+      });
+    }
+    if (newPassword === currentPassword) {
+      return res.status(400).json({ success: false, message: 'New password must be different from the current one' });
+    }
+
+    const manager = await Management.findById(req.user.id).select('+password');
+    if (!manager) {
+      return res.status(404).json({ success: false, message: 'Management account not found' });
+    }
+    if (!(await manager.comparePassword(currentPassword))) {
+      return res.status(401).json({ success: false, message: 'Current password is incorrect' });
+    }
+
+    manager.password = newPassword;
+    manager.passwordChangedAt = new Date();
+    await manager.save();
+
+    res.status(200).json({ success: true, message: 'Password changed successfully' });
+  } catch (error) {
+    console.error('❌ changePassword error:', error);
+    res.status(500).json({ success: false, message: 'Server error changing password' });
   }
 };

@@ -64,6 +64,11 @@ const managementSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    loginHistory: [{ _id: false, at: { type: Date, required: true } }],
+    passwordChangedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,
